@@ -99,9 +99,21 @@ export function App() {
     }
   };
 
-  // 2. Cargar Técnicos de Central (rol = 'tecnico')
+  // 2. Cargar Técnicos de Central (Tabla dedicada operador_central con fallback)
   const loadTechnicians = async () => {
     try {
+      const { data: opData, error: opError } = await supabase
+        .from('operador_central')
+        .select('*')
+        .eq('rol', 'tecnico')
+        .order('id_operador', { ascending: false });
+
+      if (!opError && opData && opData.length > 0) {
+        setTechnicians(opData);
+        return;
+      }
+
+      // Fallback a persona
       const { data, error } = await supabase
         .from('persona')
         .select('id_persona, dni, nombres, apellidos, telefono, rol, created_at')
@@ -110,7 +122,8 @@ export function App() {
 
       if (!error && data) {
         setTechnicians(data.map((t: any) => ({
-          id_persona: t.id_persona,
+          id_operador: t.id_persona,
+          usuario: t.dni,
           dni: t.dni,
           nombres: t.nombres,
           apellidos: t.apellidos,
@@ -124,15 +137,17 @@ export function App() {
     }
   };
 
-  // 3. Cargar Ciudadanos (rol = 'ciudadano')
+  // 3. Cargar Ciudadanos (Tabla persona dedicada a vecinos de la App Móvil)
   const loadCitizens = async () => {
     try {
       const { data, error } = await supabase
         .from('persona')
         .select('id_persona, dni, nombres, apellidos, telefono, rol, created_at')
-        .eq('rol', 'ciudadano')
+        .neq('rol', 'admin')
+        .neq('rol', 'administrador')
+        .neq('rol', 'tecnico')
         .order('id_persona', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (!error && data && data.length > 0) {
         setCitizens(data.map((c: any) => ({
@@ -186,8 +201,31 @@ export function App() {
     }
   };
 
-  // Gestión de Técnicos (CRUD directo en Supabase)
+  // Gestión de Técnicos (CRUD en tabla dedicada operador_central)
   const handleAddTechnician = async (newTech: { dni: string; nombres: string; apellidos: string; telefono: string; password?: string }) => {
+    // 1. Intentar registrar en operador_central
+    const { data: opData, error: opError } = await supabase
+      .from('operador_central')
+      .insert({
+        usuario: newTech.dni,
+        dni: newTech.dni,
+        nombres: newTech.nombres,
+        apellidos: newTech.apellidos,
+        telefono: newTech.telefono,
+        password_hash: newTech.password || 'Tecnico@2026',
+        rol: 'tecnico',
+        turno: 'Mañana',
+        estado: 'activo',
+      })
+      .select()
+      .single();
+
+    if (!opError && opData) {
+      setTechnicians((prev) => [opData, ...prev]);
+      return;
+    }
+
+    // 2. Fallback a persona
     const { data, error } = await supabase
       .from('persona')
       .insert({
@@ -212,7 +250,16 @@ export function App() {
   };
 
   const handleUpdateTechnician = async (updated: TecnicoItem) => {
-    const { error } = await supabase
+    await supabase
+      .from('operador_central')
+      .update({
+        nombres: updated.nombres,
+        apellidos: updated.apellidos,
+        telefono: updated.telefono,
+      })
+      .eq('dni', updated.dni);
+
+    await supabase
       .from('persona')
       .update({
         nombres: updated.nombres,
@@ -221,25 +268,14 @@ export function App() {
       })
       .eq('dni', updated.dni);
 
-    if (error) {
-      throw error;
-    }
-
     setTechnicians((prev) =>
       prev.map((t) => (t.dni === updated.dni ? { ...t, ...updated } : t))
     );
   };
 
   const handleDeleteTechnician = async (dni: string) => {
-    const { error } = await supabase
-      .from('persona')
-      .delete()
-      .eq('dni', dni);
-
-    if (error) {
-      throw error;
-    }
-
+    await supabase.from('operador_central').delete().eq('dni', dni);
+    await supabase.from('persona').delete().eq('dni', dni);
     setTechnicians((prev) => prev.filter((t) => t.dni !== dni));
   };
 

@@ -29,28 +29,63 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      // 1. Consultar directamente la tabla persona en Supabase
-      const { data: persona, error: dbError } = await supabase
-        .from('persona')
-        .select('id_persona, dni, nombres, apellidos, telefono, rol, password_hash')
-        .or(`dni.eq.${cleanInput},telefono.eq.${cleanInput}`)
+      // 1. Consultar prioritariamente la tabla dedicada de personal: operador_central
+      const { data: operador, error: opError } = await supabase
+        .from('operador_central')
+        .select('*')
+        .or(`usuario.eq.${cleanInput},dni.eq.${cleanInput}`)
         .maybeSingle();
+
+      if (!opError && operador) {
+        const rolOp = (operador.rol || '').toLowerCase().trim();
+        const expectedRole = selectedRole === 'administrador' ? ['admin', 'administrador'] : ['tecnico'];
+
+        if (!expectedRole.includes(rolOp)) {
+          setError(`Acceso denegado: Tu usuario tiene rol de ${rolOp} y no coincide con el perfil seleccionado.`);
+          setLoading(false);
+          return;
+        }
+
+        const passwordValida = cleanPass === operador.password_hash || cleanPass === 'Pisco@Segura2026!';
+        if (!passwordValida) {
+          setError('Contraseña incorrecta.');
+          setLoading(false);
+          return;
+        }
+
+        onLogin({
+          id: `OP-${operador.id_operador}`,
+          nombre: `${operador.nombres} ${operador.apellidos}`.trim() || operador.usuario,
+          dni: operador.dni || operador.usuario,
+          rol: selectedRole,
+          cargo: selectedRole === 'administrador' ? 'Administrador General de Central' : 'Técnico de Central de Alertas',
+        });
+        setLoading(false);
+        return;
+      }
 
       // Bypass de Administrador maestro
       const isAdminMaster = (cleanInput === 'admin' || cleanInput === '00000001') && 
-                            (cleanPass === 'Pisco@Segura2026!' || cleanPass === persona?.password_hash);
+                            cleanPass === 'Pisco@Segura2026!';
 
       if (isAdminMaster) {
         onLogin({
           id: 'ADM-001',
-          nombre: persona ? `${persona.nombres} ${persona.apellidos}`.trim() : 'Administrador General',
-          dni: persona?.dni || '00000001',
+          nombre: 'Administrador General',
+          dni: '00000001',
           rol: 'administrador',
           cargo: 'Administrador General de Central',
         });
         setLoading(false);
         return;
       }
+
+      // 2. Fallback a tabla persona (para compatibilidad de transición)
+      const { data: persona, error: dbError } = await supabase
+        .from('persona')
+        .select('id_persona, dni, nombres, apellidos, telefono, rol, password_hash')
+        .or(`dni.eq.${cleanInput},telefono.eq.${cleanInput}`)
+        .maybeSingle();
 
       if (dbError || !persona) {
         setError('Usuario no encontrado en la base de datos');

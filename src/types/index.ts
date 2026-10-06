@@ -44,13 +44,15 @@ export interface CiudadanoItem {
 }
 
 export interface TecnicoItem {
-  id_persona?: number;
+  id_operador?: number;
+  usuario?: string;
   dni: string;
   nombres: string;
   apellidos: string;
   telefono: string;
-  direccion?: string;
+  turno?: string;
   rol: string;
+  estado?: string;
   created_at?: string;
   password?: string;
 }
