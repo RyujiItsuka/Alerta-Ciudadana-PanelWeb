@@ -22,7 +22,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
     const cleanPass = password.trim();
 
     if (!cleanInput || !cleanPass) {
-      setError('Por favor ingrese su usuario/DNI y su contraseña');
+      setError('Por favor ingrese su usuario y su contraseña');
       return;
     }
 
@@ -53,7 +53,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
       }
 
       if (dbError || !persona) {
-        setError('Usuario o DNI no encontrado en la base de datos');
+        setError('Usuario no encontrado en la base de datos');
         setLoading(false);
         return;
       }
@@ -205,12 +205,12 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>
-              {selectedRole === 'administrador' ? 'Usuario o DNI de Administrador' : 'DNI de Técnico'}
+              Usuario
             </label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
-                placeholder={selectedRole === 'administrador' ? 'admin o DNI' : 'DNI del técnico'}
+                placeholder="Ingrese su usuario"
                 value={dniOrUser}
                 onChange={(e) => setDniOrUser(e.target.value)}
                 style={{
