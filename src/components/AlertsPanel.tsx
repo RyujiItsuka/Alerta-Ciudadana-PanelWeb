@@ -53,17 +53,9 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '16px' }}>
       {/* Top Action Bar */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '16px 20px',
-        borderRadius: '12px',
-        background: 'rgba(18, 24, 38, 0.7)',
-        border: '1px solid var(--border-color)',
-      }}>
+      <div className="responsive-topbar">
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             Centro de Despacho & Monitor Táctico
             <span style={{
               fontSize: '11px',
@@ -83,7 +75,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
         </div>
 
         {/* Filtros */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="filters-scroll-row">
           <button
             onClick={() => setFilterType('all')}
             style={{
@@ -92,6 +84,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
               border: '1px solid var(--border-color)',
               background: filterType === 'all' ? 'white' : 'rgba(0,0,0,0.3)',
               color: filterType === 'all' ? 'black' : 'var(--text-muted)',
@@ -107,6 +100,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
               border: '1px solid rgba(239,68,68,0.3)',
               background: filterType === 'active' ? '#ef4444' : 'rgba(239,68,68,0.1)',
               color: filterType === 'active' ? 'white' : '#fca5a5',
@@ -122,6 +116,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
               border: '1px solid rgba(245,158,11,0.3)',
               background: filterType === 'robo' ? '#f59e0b' : 'rgba(245,158,11,0.1)',
               color: filterType === 'robo' ? 'black' : '#fde68a',
@@ -133,13 +128,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
       </div>
 
       {/* Main Grid: Lista de Alertas + Panel de Acción */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1.2fr 1fr',
-        gap: '16px',
-        flex: 1,
-        minHeight: 0,
-      }}>
+      <div className="responsive-two-col">
         {/* Left: Lista de Alertas */}
         <div style={{
           overflowY: 'auto',

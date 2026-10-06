@@ -117,13 +117,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
       justifyContent: 'center',
       padding: '24px',
     }}>
-      <div className="glass-panel" style={{
-        maxWidth: '440px',
-        width: '100%',
-        padding: '36px',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-      }}>
+      <div className="glass-panel login-card">
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{

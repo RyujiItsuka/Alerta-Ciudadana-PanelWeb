@@ -105,17 +105,9 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* Header Bar */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '16px 20px',
-        borderRadius: '12px',
-        background: 'rgba(18, 24, 38, 0.7)',
-        border: '1px solid var(--border-color)',
-      }}>
+      <div className="responsive-topbar">
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <Users size={20} />
             Gestión de Técnicos de Central (Tabla persona - Supabase)
           </h2>
@@ -124,8 +116,8 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <div style={{ position: 'relative', width: '260px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '480px', justifyContent: 'flex-end' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
             <input
               type="text"
               placeholder="Buscar por DNI o Nombre..."
@@ -160,6 +152,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
               alignItems: 'center',
               gap: '6px',
               boxShadow: '0 4px 14px rgba(239,68,68,0.4)',
+              whiteSpace: 'nowrap',
             }}
           >
             <UserPlus size={16} />
@@ -169,7 +162,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
       </div>
 
       {/* Tabla de Técnicos */}
-      <div className="glass-panel" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      <div className="glass-panel table-responsive-wrapper" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.08)' }}>

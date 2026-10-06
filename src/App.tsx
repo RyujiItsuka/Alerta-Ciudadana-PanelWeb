@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Menu, ShieldAlert } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { UserSession, AlertaReporte, CiudadanoItem, TecnicoItem, SystemConfig } from './types';
 import { LoginView } from './components/LoginView';
@@ -35,6 +36,7 @@ export function App() {
   };
 
   const [currentTab, setCurrentTab] = useState<string>('alertas');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [alerts, setAlerts] = useState<AlertaReporte[]>([]);
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null);
   const [citizens, setCitizens] = useState<CiudadanoItem[]>([]);
@@ -261,18 +263,86 @@ export function App() {
   const activeAlertsCount = alerts.filter((a) => a.id_estado === 1).length;
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Barra Lateral */}
-      <Sidebar
-        session={session}
-        currentTab={currentTab}
-        onTabChange={(tab) => setCurrentTab(tab)}
-        onLogout={() => handleSetSession(null)}
-        activeAlertsCount={activeAlertsCount}
-      />
+    <div className="app-layout">
+      {/* Header Superior Móvil */}
+      <header className="mobile-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menú de navegación"
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              color: 'white',
+              borderRadius: '8px',
+              padding: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <Menu size={20} />
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldAlert size={20} color={session.rol === 'administrador' ? '#ef4444' : '#0284c7'} />
+            <span style={{ fontWeight: 800, fontSize: '15px', color: 'white', letterSpacing: '-0.3px' }}>
+              Central Alerta
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            fontSize: '11px',
+            padding: '3px 8px',
+            borderRadius: '999px',
+            background: session.rol === 'administrador' ? 'rgba(239,68,68,0.2)' : 'rgba(2,132,199,0.2)',
+            color: session.rol === 'administrador' ? '#fca5a5' : '#7dd3fc',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+          }}>
+            {session.rol === 'administrador' ? 'Admin' : 'Técnico'}
+          </span>
+          {activeAlertsCount > 0 && (
+            <span style={{
+              background: '#ef4444',
+              color: 'white',
+              fontSize: '11px',
+              padding: '2px 8px',
+              borderRadius: '999px',
+              fontWeight: 800,
+            }}>
+              {activeAlertsCount}
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* Backdrop de Oscurecimiento en Móvil */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-backdrop"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Contenedor de Barra Lateral (Drawer en móvil / Fixed en desktop) */}
+      <div className={`sidebar-container ${mobileMenuOpen ? 'open' : ''}`}>
+        <Sidebar
+          session={session}
+          currentTab={currentTab}
+          onTabChange={(tab) => {
+            setCurrentTab(tab);
+            setMobileMenuOpen(false);
+          }}
+          onLogout={() => handleSetSession(null)}
+          activeAlertsCount={activeAlertsCount}
+          onCloseMobile={() => setMobileMenuOpen(false)}
+        />
+      </div>
 
       {/* Área Principal de Trabajo */}
-      <main style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
+      <main className="main-content">
         {/* 1. Despacho & Alertas (Idéntico para Administrador y Técnico) */}
         {currentTab === 'alertas' && (
           <AlertsPanel

@@ -8,7 +8,8 @@ import {
   ShieldAlert,
   BellRing,
   UserCheck,
-  UserCog
+  UserCog,
+  X
 } from 'lucide-react';
 import type { UserSession } from '../types';
 
@@ -18,6 +19,7 @@ interface SidebarProps {
   onTabChange: (tab: string) => void;
   onLogout: () => void;
   activeAlertsCount: number;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -26,22 +28,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTabChange,
   onLogout,
   activeAlertsCount,
+  onCloseMobile,
 }) => {
   const isAdmin = session.rol === 'administrador';
 
   return (
     <aside style={{
-      width: '260px',
-      background: 'rgba(12, 17, 29, 0.95)',
+      width: '280px',
+      background: 'rgba(12, 17, 29, 0.98)',
       borderRight: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
-      height: '100vh',
+      height: '100%',
       flexShrink: 0,
     }}>
       {/* Brand Header */}
       <div style={{
-        padding: '24px 20px',
+        padding: '20px 18px',
         borderBottom: '1px solid var(--border-color)',
         display: 'flex',
         alignItems: 'center',
@@ -59,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }}>
           {isAdmin ? <ShieldAlert size={22} /> : <UserCheck size={22} />}
         </div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'white', lineHeight: '1.2' }}>
             ALERTA CIUDADANA
           </h2>
@@ -67,6 +70,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {isAdmin ? 'Mando & Admin Total' : 'Técnico de Central'}
           </span>
         </div>
+        {onCloseMobile && (
+          <button
+            onClick={onCloseMobile}
+            className="mobile-close-btn"
+            aria-label="Cerrar menú lateral"
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: 'none',
+              color: 'white',
+              borderRadius: '8px',
+              padding: '8px',
+              cursor: 'pointer',
+            }}
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       {/* User Badge */}

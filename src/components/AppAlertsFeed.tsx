@@ -45,17 +45,9 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* Header Bar */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '16px 20px',
-        borderRadius: '12px',
-        background: 'rgba(18, 24, 38, 0.7)',
-        border: '1px solid var(--border-color)',
-      }}>
+      <div className="responsive-topbar">
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <BellRing size={20} />
             Alertas App — Centro Receptor de Alertas Ciudadanas
             <span style={{
@@ -76,8 +68,8 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
         </div>
 
         {/* Buscador & Filtros */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <div style={{ position: 'relative', width: '260px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '520px', justifyContent: 'flex-end' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
             <input
               type="text"
               placeholder="Buscar por DNI, Nombre o tipo..."
@@ -97,7 +89,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
             <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
           </div>
 
-          <div style={{ display: 'flex', gap: '6px' }}>
+          <div className="filters-scroll-row">
             <button
               onClick={() => setFilterType('all')}
               style={{
@@ -106,6 +98,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
                 border: '1px solid var(--border-color)',
                 background: filterType === 'all' ? 'white' : 'rgba(0,0,0,0.3)',
                 color: filterType === 'all' ? 'black' : 'var(--text-muted)',
@@ -121,6 +114,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
                 border: '1px solid rgba(239,68,68,0.3)',
                 background: filterType === 'robo' ? '#ef4444' : 'rgba(239,68,68,0.1)',
                 color: filterType === 'robo' ? 'white' : '#fca5a5',
@@ -133,7 +127,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
       </div>
 
       {/* Grid: Lista Completa de Alertas + Detalle de Telemetría */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '16px', flex: 1, minHeight: 0 }}>
+      <div className="responsive-two-col">
         {/* Lista de Alertas */}
         <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '6px' }}>
           {filtered.length === 0 ? (
