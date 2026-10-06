@@ -124,7 +124,6 @@ export function App() {
         setTechnicians(data.map((t: any) => ({
           id_operador: t.id_persona,
           usuario: t.dni,
-          dni: t.dni,
           nombres: t.nombres,
           apellidos: t.apellidos,
           telefono: t.telefono,
@@ -201,14 +200,12 @@ export function App() {
     }
   };
 
-  // Gestión de Técnicos (CRUD en tabla dedicada operador_central)
-  const handleAddTechnician = async (newTech: { dni: string; nombres: string; apellidos: string; telefono: string; password?: string }) => {
-    // 1. Intentar registrar en operador_central
+  // Gestión de Técnicos (CRUD en tabla dedicada operador_central sin DNI)
+  const handleAddTechnician = async (newTech: { usuario: string; nombres: string; apellidos: string; telefono: string; password?: string }) => {
     const { data: opData, error: opError } = await supabase
       .from('operador_central')
       .insert({
-        usuario: newTech.dni,
-        dni: newTech.dni,
+        usuario: newTech.usuario,
         nombres: newTech.nombres,
         apellidos: newTech.apellidos,
         telefono: newTech.telefono,
@@ -220,63 +217,47 @@ export function App() {
       .select()
       .single();
 
-    if (!opError && opData) {
+    if (opError) {
+      throw opError;
+    }
+
+    if (opData) {
       setTechnicians((prev) => [opData, ...prev]);
-      return;
-    }
-
-    // 2. Fallback a persona
-    const { data, error } = await supabase
-      .from('persona')
-      .insert({
-        dni: newTech.dni,
-        nombres: newTech.nombres,
-        apellidos: newTech.apellidos,
-        telefono: newTech.telefono,
-        password_hash: newTech.password || 'Tecnico@2026',
-        pin_hash: '1234',
-        rol: 'tecnico',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    if (data) {
-      setTechnicians((prev) => [data, ...prev]);
     }
   };
 
   const handleUpdateTechnician = async (updated: TecnicoItem) => {
-    await supabase
+    const { error } = await supabase
       .from('operador_central')
       .update({
         nombres: updated.nombres,
         apellidos: updated.apellidos,
         telefono: updated.telefono,
       })
-      .eq('dni', updated.dni);
+      .eq('usuario', updated.usuario);
 
-    await supabase
-      .from('persona')
-      .update({
-        nombres: updated.nombres,
-        apellidos: updated.apellidos,
-        telefono: updated.telefono,
-      })
-      .eq('dni', updated.dni);
+    if (error) {
+      console.error('Error al actualizar técnico:', error);
+      throw error;
+    }
 
     setTechnicians((prev) =>
-      prev.map((t) => (t.dni === updated.dni ? { ...t, ...updated } : t))
+      prev.map((t) => (t.usuario === updated.usuario ? { ...t, ...updated } : t))
     );
   };
 
-  const handleDeleteTechnician = async (dni: string) => {
-    await supabase.from('operador_central').delete().eq('dni', dni);
-    await supabase.from('persona').delete().eq('dni', dni);
-    setTechnicians((prev) => prev.filter((t) => t.dni !== dni));
+  const handleDeleteTechnician = async (usuario: string) => {
+    const { error } = await supabase
+      .from('operador_central')
+      .delete()
+      .eq('usuario', usuario);
+
+    if (error) {
+      console.error('Error al eliminar técnico:', error);
+      throw error;
+    }
+
+    setTechnicians((prev) => prev.filter((t) => t.usuario !== usuario));
   };
 
   // Suspender / Reactivar Ciudadano

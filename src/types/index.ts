@@ -6,7 +6,7 @@ export interface UserSession {
   email?: string;
   rol: 'administrador' | 'tecnico';
   cargo: string;
-  dni: string;
+  usuario: string;
 }
 
 export interface AlertaReporte {
@@ -45,8 +45,7 @@ export interface CiudadanoItem {
 
 export interface TecnicoItem {
   id_operador?: number;
-  usuario?: string;
-  dni: string;
+  usuario: string;
   nombres: string;
   apellidos: string;
   telefono: string;

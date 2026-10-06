@@ -15,9 +15,9 @@ import type { TecnicoItem } from '../types';
 
 interface TechniciansManagementProps {
   technicians: TecnicoItem[];
-  onAddTechnician: (tecnico: { dni: string; nombres: string; apellidos: string; telefono: string; password?: string }) => Promise<void>;
+  onAddTechnician: (tecnico: { usuario: string; nombres: string; apellidos: string; telefono: string; password?: string }) => Promise<void>;
   onUpdateTechnician: (tecnico: TecnicoItem) => Promise<void>;
-  onDeleteTechnician: (dni: string) => Promise<void>;
+  onDeleteTechnician: (usuario: string) => Promise<void>;
 }
 
 export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
@@ -31,7 +31,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
   const [editingTech, setEditingTech] = useState<TecnicoItem | null>(null);
 
   // Campos de formulario
-  const [dni, setDni] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -40,7 +40,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
 
   const openNewModal = () => {
     setEditingTech(null);
-    setDni('');
+    setUsuario('');
     setNombres('');
     setApellidos('');
     setTelefono('');
@@ -50,7 +50,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
 
   const openEditModal = (tech: TecnicoItem) => {
     setEditingTech(tech);
-    setDni(tech.dni);
+    setUsuario(tech.usuario || '');
     setNombres(tech.nombres);
     setApellidos(tech.apellidos);
     setTelefono(tech.telefono);
@@ -60,8 +60,8 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dni || !nombres || !apellidos || !telefono) {
-      alert('Por favor complete los campos obligatorios (DNI, nombres, apellidos, teléfono)');
+    if (!usuario || !nombres || !apellidos || !telefono) {
+      alert('Por favor complete los campos obligatorios (Usuario, nombres, apellidos, teléfono)');
       return;
     }
 
@@ -70,14 +70,14 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
       if (editingTech) {
         await onUpdateTechnician({
           ...editingTech,
-          dni,
+          usuario,
           nombres,
           apellidos,
           telefono,
         });
       } else {
         await onAddTechnician({
-          dni,
+          usuario: usuario.trim().toLowerCase(),
           nombres,
           apellidos,
           telefono,
@@ -94,8 +94,9 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
 
   const filtered = technicians.filter((t) => {
     const q = searchTerm.toLowerCase();
+    const u = (t.usuario || '').toLowerCase();
     return (
-      t.dni.includes(q) ||
+      u.includes(q) ||
       t.nombres.toLowerCase().includes(q) ||
       t.apellidos.toLowerCase().includes(q) ||
       t.telefono.includes(q)
@@ -109,7 +110,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
         <div>
           <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <Users size={20} />
-            Gestión de Técnicos de Central (Tabla persona - Supabase)
+            Gestión de Técnicos de Central (Tabla operador_central - Supabase)
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
             Personal autorizado con rol 'tecnico' para acceder al panel web de monitoreo
@@ -120,7 +121,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
           <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
             <input
               type="text"
-              placeholder="Buscar por DNI o Nombre..."
+              placeholder="Buscar por Usuario o Nombre..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -166,7 +167,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.08)' }}>
-              <th style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>DNI</th>
+              <th style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Usuario</th>
               <th style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Técnico</th>
               <th style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Teléfono</th>
               <th style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Rol en BD</th>
@@ -182,9 +183,9 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
               </tr>
             ) : (
               filtered.map((t) => (
-                <tr key={t.dni} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <tr key={t.usuario || t.id_operador} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>
-                    {t.dni}
+                    {t.usuario}
                   </td>
                   <td style={{ padding: '14px' }}>
                     <div style={{ fontWeight: 700, color: 'white' }}>{t.nombres} {t.apellidos}</div>
@@ -233,8 +234,8 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
 
                       <button
                         onClick={() => {
-                          if (confirm(`¿Estás seguro de eliminar al técnico ${t.nombres} ${t.apellidos} (DNI ${t.dni})?`)) {
-                            onDeleteTechnician(t.dni);
+                          if (confirm(`¿Estás seguro de eliminar al técnico ${t.nombres} ${t.apellidos} (Usuario: ${t.usuario})?`)) {
+                            onDeleteTechnician(t.usuario);
                           }
                         }}
                         title="Eliminar técnico"
@@ -304,15 +305,15 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px' }}>
-                    DNI *
+                    Usuario de Acceso *
                   </label>
                   <input
                     type="text"
                     required
                     disabled={!!editingTech}
-                    placeholder="8 dígitos"
-                    value={dni}
-                    onChange={(e) => setDni(e.target.value)}
+                    placeholder="ej. tec_salcedo"
+                    value={usuario}
+                    onChange={(e) => setUsuario(e.target.value.toLowerCase().trim())}
                     style={{
                       width: '100%',
                       padding: '8px 10px',

@@ -33,7 +33,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
       const { data: operador, error: opError } = await supabase
         .from('operador_central')
         .select('*')
-        .or(`usuario.eq.${cleanInput},dni.eq.${cleanInput}`)
+        .eq('usuario', cleanInput)
         .maybeSingle();
 
       if (!opError && operador) {
@@ -56,7 +56,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         onLogin({
           id: `OP-${operador.id_operador}`,
           nombre: `${operador.nombres} ${operador.apellidos}`.trim() || operador.usuario,
-          dni: operador.dni || operador.usuario,
+          usuario: operador.usuario,
           rol: selectedRole,
           cargo: selectedRole === 'administrador' ? 'Administrador General de Central' : 'Técnico de Central de Alertas',
         });
@@ -64,15 +64,14 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         return;
       }
 
-      // Bypass de Administrador maestro
-      const isAdminMaster = (cleanInput === 'admin' || cleanInput === '00000001') && 
-                            cleanPass === 'Pisco@Segura2026!';
+      // Bypass de Administrador maestro por usuario 'admin'
+      const isAdminMaster = cleanInput === 'admin' && cleanPass === 'Pisco@Segura2026!';
 
       if (isAdminMaster) {
         onLogin({
           id: 'ADM-001',
           nombre: 'Administrador General',
-          dni: '00000001',
+          usuario: 'admin',
           rol: 'administrador',
           cargo: 'Administrador General de Central',
         });
@@ -133,7 +132,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
       onLogin({
         id: `${selectedRole === 'administrador' ? 'ADM' : 'TEC'}-${persona.id_persona}`,
         nombre: `${persona.nombres} ${persona.apellidos}`.trim() || 'Operador',
-        dni: persona.dni,
+        usuario: persona.dni || String(persona.id_persona),
         rol: selectedRole,
         cargo: selectedRole === 'administrador' ? 'Administrador General de Central' : 'Técnico de Central de Alertas',
       });
