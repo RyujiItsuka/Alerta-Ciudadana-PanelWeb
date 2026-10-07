@@ -52,9 +52,9 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
         zoom: 16,
       });
 
-      // CartoDB Dark Matter tiles para estética táctica nocturna
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      // OpenStreetMap estándar (100% gratuito, sin necesidad de API key)
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(map);
 
