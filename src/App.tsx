@@ -237,12 +237,20 @@ export function App() {
     );
 
     try {
-      await supabase
+      const { error } = await supabase
         .from('reporte')
         .update({ id_estado: newStatusId })
         .eq('id_reporte', alertId);
+
+      if (error) {
+        console.error('Error persistiendo nuevo estado en Supabase:', error.message);
+        loadAlerts();
+      } else {
+        console.log(`[SUPABASE] Reporte #${alertId} actualizado exitosamente a estado ${newStatusId}`);
+      }
     } catch (err) {
-      console.warn('Error sincronizando estado con Supabase:', err);
+      console.warn('Error de red sincronizando estado con Supabase:', err);
+      loadAlerts();
     }
   };
 
@@ -621,6 +629,7 @@ export function App() {
             alerts={alerts}
             onSelectAlert={(a) => setSelectedAlertId(a.id_reporte)}
             selectedAlertId={selectedAlertId}
+            onUpdateStatus={handleUpdateStatus}
           />
         )}
 

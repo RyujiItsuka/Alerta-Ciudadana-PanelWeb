@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   Calendar,
   X,
-  Radio
+  RotateCcw
 } from 'lucide-react';
 import type { AlertaReporte } from '../types';
 
@@ -18,12 +18,14 @@ interface AppAlertsFeedProps {
   alerts: AlertaReporte[];
   onSelectAlert: (alert: AlertaReporte) => void;
   selectedAlertId: number | null;
+  onUpdateStatus?: (alertId: number, newStatusId: number, statusName: string) => void;
 }
 
 export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
   alerts,
   onSelectAlert,
   selectedAlertId,
+  onUpdateStatus,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -349,10 +351,6 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
               const lat = current.ubicacion?.latitud || -13.7142;
               const lon = current.ubicacion?.longitud || -76.2038;
               const gmapsPinUrl = `https://www.google.com/maps?q=${lat},${lon}`;
-              const isRobo =
-                current.tipo_incidencia?.nombre?.toLowerCase().includes('robo') ||
-                current.descripcion?.toLowerCase().includes('robo') ||
-                current.descripcion?.toLowerCase().includes('arrebato');
 
               return (
                 <>
@@ -403,18 +401,15 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                     </div>
                   </div>
 
-                  {/* Acceso a GPS */}
+                  {/* Acciones de Historial: Reabrir Alerta y Google Maps */}
                   <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {isRobo && (
+                    {(current.id_estado === 3 || current.id_estado === 4) && onUpdateStatus && (
                       <button
-                        onClick={() => {
-                          const trackingUrl = `${window.location.origin}${window.location.pathname}?tracking=${current.id_reporte}`;
-                          window.open(trackingUrl, `tracking_${current.id_reporte}`, 'width=1280,height=820,menubar=no,status=no,toolbar=no');
-                        }}
+                        onClick={() => onUpdateStatus(current.id_reporte, 1, 'Pendiente')}
                         style={{
                           width: '100%',
-                          background: '#dc2626',
-                          color: 'white',
+                          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                          color: '#000000',
                           padding: '12px',
                           borderRadius: '8px',
                           border: 'none',
@@ -424,14 +419,14 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '6px',
-                          boxShadow: '0 0 14px rgba(220,38,38,0.4)',
+                          gap: '8px',
+                          boxShadow: '0 4px 14px rgba(245,158,11,0.35)',
+                          transition: 'all 0.2s',
                         }}
-                        title="Abrir seguimiento GPS en ventana independiente del navegador"
+                        title="Reactivar esta alerta y devolverla a la mesa de Despacho & Alertas en estado Pendiente"
                       >
-                        <Radio size={16} />
-                        🔴 SEGUIMIENTO GPS EN VIVO
-                        <ExternalLink size={14} />
+                        <RotateCcw size={16} />
+                        Reabrir Alerta (Reactivar en Despacho)
                       </button>
                     )}
 

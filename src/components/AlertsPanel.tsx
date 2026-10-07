@@ -6,7 +6,6 @@ import {
   CheckCircle2, 
   Car, 
   XCircle, 
-  AlertTriangle,
   Navigation,
   Radio
 } from 'lucide-react';
@@ -30,12 +29,33 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
   const [filterType, setFilterType] = useState<string>('all');
   const [trackingAlert, setTrackingAlert] = useState<AlertaReporte | null>(null);
 
-  const filteredAlerts = alerts.filter((a) => {
+  // EN DESPACHO & ALERTAS: SOLO se muestran alertas activas (Pendientes: 1 y En camino: 2)
+  // Las alertas Atendidas (3) y Falsas Alarmas (4) pasan automáticamente a Historial de Alertas.
+  // Ordenadas cronológicamente por hora de activación (más recientes primero).
+  const activeAlerts = alerts
+    .filter((a) => a.id_estado === 1 || a.id_estado === 2)
+    .sort((a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime());
+
+  const filteredAlerts = activeAlerts.filter((a) => {
     if (filterType === 'all') return true;
     if (filterType === 'pending') return a.id_estado === 1;
     if (filterType === 'onway') return a.id_estado === 2;
     return true;
   });
+
+  const countPending = activeAlerts.filter(a => a.id_estado === 1).length;
+  const countOnWay = activeAlerts.filter(a => a.id_estado === 2).length;
+
+  // Si la alerta seleccionada dejó de estar activa (se marcó como atendida o falsa alarma),
+  // auto-seleccionar la primera alerta activa restante para mantener el detalle actualizado.
+  React.useEffect(() => {
+    if (filteredAlerts.length > 0) {
+      const isSelectedStillActive = filteredAlerts.some((a) => a.id_reporte === selectedAlertId);
+      if (!isSelectedStillActive) {
+        onSelectAlert(filteredAlerts[0]);
+      }
+    }
+  }, [filteredAlerts, selectedAlertId, onSelectAlert]);
 
   const getStatusBadge = (idEstado: number) => {
     switch (idEstado) {
@@ -43,12 +63,8 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
         return <span style={{ background: '#ef4444', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>🚨 PENDIENTE</span>;
       case 2:
         return <span style={{ background: '#f59e0b', color: 'black', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>🚓 EN CAMINO</span>;
-      case 3:
-        return <span style={{ background: '#10b981', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>✅ ATENDIDA</span>;
-      case 4:
-        return <span style={{ background: '#64748b', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>❌ FALSA ALARMA</span>;
       default:
-        return <span style={{ background: '#3b82f6', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>REGISTRADA</span>;
+        return <span style={{ background: '#3b82f6', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>ACTIVA</span>;
     }
   };
 
@@ -92,7 +108,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               color: filterType === 'all' ? 'black' : 'var(--text-muted)',
             }}
           >
-            Todas ({alerts.length})
+            Todas ({activeAlerts.length})
           </button>
           <button
             onClick={() => setFilterType('pending')}
@@ -108,7 +124,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               color: filterType === 'pending' ? 'white' : '#fca5a5',
             }}
           >
-            Pendientes
+            Pendientes ({countPending})
           </button>
           <button
             onClick={() => setFilterType('onway')}
@@ -124,7 +140,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               color: filterType === 'onway' ? 'black' : '#fde68a',
             }}
           >
-            En camino
+            En camino ({countOnWay})
           </button>
         </div>
       </div>
@@ -381,9 +397,10 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                       <button
                         onClick={() => onUpdateStatus(current.id_reporte, 4, 'Falsa Alarma')}
                         style={{
-                          background: 'rgba(239,68,68,0.15)',
+                          gridColumn: 'span 2',
+                          background: 'rgba(239,68,68,0.12)',
                           color: '#f87171',
-                          border: '1px solid rgba(239,68,68,0.3)',
+                          border: '1px solid rgba(239,68,68,0.25)',
                           padding: '10px',
                           borderRadius: '8px',
                           fontWeight: 700,
@@ -397,27 +414,6 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                       >
                         <XCircle size={14} />
                         Falsa Alarma
-                      </button>
-
-                      <button
-                        onClick={() => onUpdateStatus(current.id_reporte, 1, 'Pendiente')}
-                        style={{
-                          background: 'rgba(255,255,255,0.06)',
-                          color: 'var(--text-muted)',
-                          border: '1px solid var(--border-color)',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          fontWeight: 700,
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <AlertTriangle size={14} />
-                        Reabrir Alerta
                       </button>
                     </div>
                   </div>
