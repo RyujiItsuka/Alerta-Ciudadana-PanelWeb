@@ -225,12 +225,12 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>
-              Usuario o DNI
+              Usuario
             </label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
-                placeholder="Ingrese su usuario asignado"
+                placeholder="Ingrese su usuario"
                 value={dniOrUser}
                 onChange={(e) => setDniOrUser(e.target.value)}
                 autoComplete="username"
