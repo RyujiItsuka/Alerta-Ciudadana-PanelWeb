@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { X, ExternalLink, Radio, Navigation, Clock, ShieldAlert } from 'lucide-react';
+import { X, ExternalLink, Radio, Navigation, Clock, ShieldAlert, AlertTriangle, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AlertaReporte } from '../types';
 
@@ -39,6 +39,8 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
   ]);
   const [lastUpdate, setLastUpdate] = useState<string>('Conectando...');
   const [isLive, setIsLive] = useState<boolean>(true);
+  const [isCancelled, setIsCancelled] = useState<boolean>(false);
+  const [cancelledTime, setCancelledTime] = useState<string>('');
 
   const currentLat = points.length > 0 ? points[points.length - 1].latitud : initialLat;
   const currentLon = points.length > 0 ? points[points.length - 1].longitud : initialLon;
@@ -120,16 +122,42 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
           .order('id_ubicacion', { ascending: true });
 
         if (!error && data && data.length > 0 && isSubscribed) {
-          const mapped: UbicacionPoint[] = data.map((d: any) => ({
-            id: d.id_ubicacion,
-            id_reporte: d.id_reporte,
-            latitud: Number(d.latitud),
-            longitud: Number(d.longitud),
-            fecha_hora: d.fecha_hora,
-          }));
-          setPoints(mapped);
-          setLastUpdate(new Date().toLocaleTimeString('es-PE'));
-          updateMapRoute(mapped);
+          // Detectar si existe marcador de cancelación (0,0) enviado por la app
+          const cancelPoint = data.find((d: any) => Math.abs(Number(d.latitud)) < 0.0001 && Math.abs(Number(d.longitud)) < 0.0001);
+          if (cancelPoint) {
+            setIsCancelled(true);
+            setIsLive(false);
+            setCancelledTime(new Date(cancelPoint.fecha_hora || Date.now()).toLocaleTimeString('es-PE'));
+          }
+
+          // Filtrar coordenadas reales válidas (excluyendo el marcador 0,0 de cancelación)
+          const validRows = data.filter((d: any) => !(Math.abs(Number(d.latitud)) < 0.0001 && Math.abs(Number(d.longitud)) < 0.0001));
+          if (validRows.length > 0) {
+            const mapped: UbicacionPoint[] = validRows.map((d: any) => ({
+              id: d.id_ubicacion,
+              id_reporte: d.id_reporte,
+              latitud: Number(d.latitud),
+              longitud: Number(d.longitud),
+              fecha_hora: d.fecha_hora,
+            }));
+            setPoints(mapped);
+            setLastUpdate(new Date(mapped[mapped.length - 1].fecha_hora || Date.now()).toLocaleTimeString('es-PE'));
+            updateMapRoute(mapped, cancelPoint != null);
+          }
+        }
+
+        // También verificar estado en tabla reporte
+        const { data: repData } = await supabase
+          .from('reporte')
+          .select('descripcion, id_estado')
+          .eq('id_reporte', alert.id_reporte)
+          .single();
+
+        if (repData && isSubscribed) {
+          if (repData.descripcion?.includes('[TRANSMISIÓN DE UBICACIÓN FINALIZADA POR EL USUARIO]') || repData.descripcion?.includes('[CANCELADO_POR_USUARIO]')) {
+            setIsCancelled(true);
+            setIsLive(false);
+          }
         }
       } catch (err) {
         console.warn('Error cargando historial de ubicaciones:', err);
@@ -151,17 +179,33 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
         },
         (payload) => {
           const newRow = payload.new as any;
-          if (newRow && newRow.latitud && newRow.longitud && isSubscribed) {
+          if (newRow && isSubscribed) {
+            const lat = Number(newRow.latitud);
+            const lon = Number(newRow.longitud);
+
+            // Si llega el marcador especial (0, 0), indica que el usuario canceló el rastreo desde la app
+            if (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) {
+              const nowTime = new Date().toLocaleTimeString('es-PE');
+              setIsCancelled(true);
+              setIsLive(false);
+              setCancelledTime(nowTime);
+              setPoints((prev) => {
+                updateMapRoute(prev, true);
+                return prev;
+              });
+              return;
+            }
+
             const newPoint: UbicacionPoint = {
               id: newRow.id_ubicacion,
               id_reporte: newRow.id_reporte,
-              latitud: Number(newRow.latitud),
-              longitud: Number(newRow.longitud),
+              latitud: lat,
+              longitud: lon,
               fecha_hora: newRow.fecha_hora || new Date().toISOString(),
             };
             setPoints((prev) => {
               const next = [...prev, newPoint];
-              updateMapRoute(next);
+              updateMapRoute(next, false);
               return next;
             });
             setLastUpdate(new Date().toLocaleTimeString('es-PE'));
@@ -184,7 +228,7 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
   }, [alert.id_reporte]);
 
   // Actualizar marcadores y polilínea en el mapa
-  const updateMapRoute = (currentPoints: UbicacionPoint[]) => {
+  const updateMapRoute = (currentPoints: UbicacionPoint[], cancelled: boolean = false) => {
     if (!mapInstanceRef.current || currentPoints.length === 0) return;
 
     const latLngs: [number, number][] = currentPoints.map((p) => [p.latitud, p.longitud]);
@@ -192,15 +236,27 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
 
     if (polylineRef.current) {
       polylineRef.current.setLatLngs(latLngs);
+      polylineRef.current.setStyle({
+        color: cancelled ? '#f59e0b' : '#ef4444',
+      });
     }
 
     if (markerRef.current) {
       markerRef.current.setLatLng(latest);
-      markerRef.current.setPopupContent(
-        `<b>🚨 Posición Actual (Punto #${currentPoints.length})</b><br>` +
-        `Lat: ${latest[0].toFixed(5)}, Lon: ${latest[1].toFixed(5)}<br>` +
-        `<small style="color:#94a3b8">Hora: ${new Date().toLocaleTimeString('es-PE')}</small>`
-      );
+      if (cancelled) {
+        markerRef.current.setPopupContent(
+          `<b>⏹️ Última Posición Recibida (Rastreo Finalizado)</b><br>` +
+          `Lat: ${latest[0].toFixed(5)}, Lon: ${latest[1].toFixed(5)}<br>` +
+          `<small style="color:#ef4444;font-weight:700;">⚠️ Transmisión cancelada por el usuario</small><br>` +
+          `<small style="color:#94a3b8">Hora guardada: ${new Date().toLocaleTimeString('es-PE')}</small>`
+        ).openPopup();
+      } else {
+        markerRef.current.setPopupContent(
+          `<b>🚨 Posición Actual (Punto #${currentPoints.length})</b><br>` +
+          `Lat: ${latest[0].toFixed(5)}, Lon: ${latest[1].toFixed(5)}<br>` +
+          `<small style="color:#94a3b8">Hora: ${new Date().toLocaleTimeString('es-PE')}</small>`
+        );
+      }
     }
 
     // Centrar mapa suavemente en la nueva posición
@@ -249,8 +305,8 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
-              background: 'rgba(239, 68, 68, 0.2)',
-              border: '1px solid rgba(239, 68, 68, 0.4)',
+              background: isCancelled ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.2)',
+              border: `1px solid ${isCancelled ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.4)'}`,
               color: '#ef4444',
               padding: '8px',
               borderRadius: '10px',
@@ -265,21 +321,40 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
                 <h3 style={{ margin: 0, color: 'white', fontSize: '17px', fontWeight: 800 }}>
                   Rastreo Táctico en Vivo — Incidente #{alert.id_reporte}
                 </h3>
-                <span style={{
-                  background: isLive ? '#ef4444' : '#64748b',
-                  color: 'white',
-                  padding: '2px 8px',
-                  borderRadius: '999px',
-                  fontSize: '10px',
-                  fontWeight: 800,
-                  letterSpacing: '0.8px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}>
-                  <Radio size={12} />
-                  {isLive ? 'EN VIVO (5s)' : 'PAUSADO'}
-                </span>
+                {isCancelled ? (
+                  <span style={{
+                    background: '#b91c1c',
+                    color: 'white',
+                    padding: '3px 10px',
+                    borderRadius: '999px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    letterSpacing: '0.8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    boxShadow: '0 0 10px rgba(185, 28, 28, 0.5)',
+                  }}>
+                    <XCircle size={13} />
+                    CANCELADO POR EL USUARIO
+                  </span>
+                ) : (
+                  <span style={{
+                    background: isLive ? '#ef4444' : '#64748b',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    letterSpacing: '0.8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}>
+                    <Radio size={12} />
+                    {isLive ? 'EN VIVO (5s)' : 'PAUSADO'}
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                 Víctima: <strong style={{ color: '#f8fafc' }}>{alert.ciudadano?.nombres || 'Ciudadano'} {alert.ciudadano?.apellidos || ''}</strong> (DNI: {alert.ciudadano?.dni || 'No reg.'}) | Tel: {alert.ciudadano?.telefono || 'No reg.'}
@@ -306,7 +381,7 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
               }}
             >
               <Navigation size={14} />
-              Ver en Google Maps
+              {isCancelled ? 'Ver última ubicación en Google Maps' : 'Ver en Google Maps'}
               <ExternalLink size={12} />
             </a>
 
@@ -361,20 +436,62 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
           </div>
         </div>
 
-        {/* Modal Body: Map + Floating Telemetry Box */}
+        {/* Modal Body: Map + Floating Telemetry Box + Cancellation Banner */}
         <div style={{ position: 'relative', flex: 1, width: '100%', height: '100%' }}>
           {/* Leaflet Map Div */}
           <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
+          {/* Banner de Cancelación por el Usuario */}
+          {isCancelled && (
+            <div style={{
+              position: 'absolute',
+              top: '16px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1000,
+              background: 'rgba(185, 28, 28, 0.95)',
+              backdropFilter: 'blur(10px)',
+              border: '2px solid #f87171',
+              borderRadius: '12px',
+              padding: '12px 20px',
+              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              color: 'white',
+              maxWidth: '90%',
+            }}>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '8px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <AlertTriangle size={24} color="#fef08a" />
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '14px', color: '#ffffff' }}>
+                  ⚠️ Transmisión de ubicación en vivo cancelada por el usuario
+                </div>
+                <div style={{ fontSize: '12px', color: '#fecaca', marginTop: '2px' }}>
+                  El usuario finalizó el seguimiento desde la aplicación móvil{cancelledTime ? ` a las ${cancelledTime}` : ''}.
+                  La <strong>última ubicación recibida se encuentra guardada</strong> y permanece fijada en el mapa ({currentLat.toFixed(5)}, {currentLon.toFixed(5)}).
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Floating Telemetry Box */}
           <div style={{
             position: 'absolute',
-            top: '16px',
+            top: isCancelled ? '85px' : '16px',
             right: '16px',
             zIndex: 1000,
             background: 'rgba(15, 23, 42, 0.94)',
             backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(239, 68, 68, 0.4)',
+            border: `1px solid ${isCancelled ? 'rgba(239, 68, 68, 0.6)' : 'rgba(239, 68, 68, 0.4)'}`,
             borderRadius: '12px',
             padding: '14px 16px',
             minWidth: '260px',
@@ -384,7 +501,7 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
           }}>
             <div style={{
               fontWeight: 800,
-              color: '#f87171',
+              color: isCancelled ? '#fca5a5' : '#f87171',
               marginBottom: '10px',
               borderBottom: '1px solid rgba(255,255,255,0.1)',
               paddingBottom: '6px',
@@ -392,8 +509,8 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
               alignItems: 'center',
               gap: '6px',
             }}>
-              <Radio size={14} color="#ef4444" />
-              Telemetría Móvil Continua
+              <Radio size={14} color={isCancelled ? '#f87171' : '#ef4444'} />
+              {isCancelled ? 'Rastreo Finalizado (Guardado)' : 'Telemetría Móvil Continua'}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -402,18 +519,18 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Latitud actual:</span>
+              <span style={{ color: 'var(--text-muted)' }}>{isCancelled ? 'Última latitud:' : 'Latitud actual:'}</span>
               <strong style={{ fontFamily: 'monospace' }}>{currentLat.toFixed(5)}</strong>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Longitud actual:</span>
+              <span style={{ color: 'var(--text-muted)' }}>{isCancelled ? 'Última longitud:' : 'Longitud actual:'}</span>
               <strong style={{ fontFamily: 'monospace' }}>{currentLon.toFixed(5)}</strong>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Última señal:</span>
-              <span style={{ color: '#4ade80', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: 'var(--text-muted)' }}>{isCancelled ? 'Última coordenada guardada:' : 'Última señal:'}</span>
+              <span style={{ color: isCancelled ? '#fbbf24' : '#4ade80', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Clock size={12} />
                 {lastUpdate}
               </span>
@@ -421,11 +538,13 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
 
             <div style={{
               fontSize: '11px',
-              color: 'var(--text-dim)',
+              color: isCancelled ? '#fca5a5' : 'var(--text-dim)',
               borderTop: '1px solid rgba(255,255,255,0.08)',
               paddingTop: '6px',
             }}>
-              📡 Coordenadas recibidas cada 5s directamente desde el sensor GPS del dispositivo móvil.
+              {isCancelled
+                ? '⏹️ El usuario canceló la transmisión. Esta última coordenada quedó guardada en el sistema.'
+                : '📡 Coordenadas recibidas cada 5s directamente desde el sensor GPS del dispositivo móvil.'}
             </div>
           </div>
         </div>
