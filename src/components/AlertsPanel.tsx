@@ -7,9 +7,11 @@ import {
   Car, 
   XCircle, 
   AlertTriangle,
-  Navigation
+  Navigation,
+  Radio
 } from 'lucide-react';
 import type { AlertaReporte, UserSession } from '../types';
+import { LiveTrackingModal } from './LiveTrackingModal';
 
 interface AlertsPanelProps {
   alerts: AlertaReporte[];
@@ -26,12 +28,12 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
   selectedAlertId,
 }) => {
   const [filterType, setFilterType] = useState<string>('all');
+  const [trackingAlert, setTrackingAlert] = useState<AlertaReporte | null>(null);
 
   const filteredAlerts = alerts.filter((a) => {
     if (filterType === 'all') return true;
-    if (filterType === 'active') return a.id_estado === 1 || a.id_estado === 2;
-    if (filterType === 'resolved') return a.id_estado === 3;
-    if (filterType === 'robo') return a.tipo_incidencia?.nombre?.toLowerCase().includes('robo');
+    if (filterType === 'pending') return a.id_estado === 1;
+    if (filterType === 'onway') return a.id_estado === 2;
     return true;
   });
 
@@ -93,7 +95,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
             Todas ({alerts.length})
           </button>
           <button
-            onClick={() => setFilterType('active')}
+            onClick={() => setFilterType('pending')}
             style={{
               padding: '6px 12px',
               borderRadius: '6px',
@@ -102,14 +104,14 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               border: '1px solid rgba(239,68,68,0.3)',
-              background: filterType === 'active' ? '#ef4444' : 'rgba(239,68,68,0.1)',
-              color: filterType === 'active' ? 'white' : '#fca5a5',
+              background: filterType === 'pending' ? '#ef4444' : 'rgba(239,68,68,0.1)',
+              color: filterType === 'pending' ? 'white' : '#fca5a5',
             }}
           >
             Pendientes
           </button>
           <button
-            onClick={() => setFilterType('robo')}
+            onClick={() => setFilterType('onway')}
             style={{
               padding: '6px 12px',
               borderRadius: '6px',
@@ -118,11 +120,11 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               border: '1px solid rgba(245,158,11,0.3)',
-              background: filterType === 'robo' ? '#f59e0b' : 'rgba(245,158,11,0.1)',
-              color: filterType === 'robo' ? 'black' : '#fde68a',
+              background: filterType === 'onway' ? '#f59e0b' : 'rgba(245,158,11,0.1)',
+              color: filterType === 'onway' ? 'black' : '#fde68a',
             }}
           >
-            Robos / Arrebatos
+            En camino
           </button>
         </div>
       </div>
@@ -236,7 +238,11 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
               if (!current) return null;
               const lat = current.ubicacion?.latitud || -13.7142;
               const lon = current.ubicacion?.longitud || -76.2038;
-              const gmapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+              const gmapsPointUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+              const isRobo =
+                current.tipo_incidencia?.nombre?.toLowerCase().includes('robo') ||
+                current.descripcion?.toLowerCase().includes('robo') ||
+                current.descripcion?.toLowerCase().includes('arrebato');
 
               return (
                 <>
@@ -264,13 +270,14 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <a
-                      href={gmapsNavUrl}
+                      href={gmapsPointUrl}
                       target="_blank"
                       rel="noreferrer"
                       style={{
                         flex: 1,
+                        minWidth: '180px',
                         background: '#2563eb',
                         color: 'white',
                         padding: '10px',
@@ -285,10 +292,36 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                         gap: '6px',
                       }}
                     >
-                      <Navigation size={14} />
-                      Navegar a Coordenadas (Google Maps)
+                      <MapPin size={14} />
+                      Ver Ubicación (Google Maps)
                       <ExternalLink size={12} />
                     </a>
+
+                    {isRobo && (
+                      <button
+                        onClick={() => setTrackingAlert(current)}
+                        style={{
+                          flex: 1,
+                          minWidth: '180px',
+                          background: '#dc2626',
+                          color: 'white',
+                          padding: '10px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          boxShadow: '0 0 14px rgba(220,38,38,0.5)',
+                        }}
+                      >
+                        <Radio size={14} />
+                        🔴 SEGUIMIENTO GPS EN VIVO
+                      </button>
+                    )}
                   </div>
 
                   {/* Acciones de Despacho (Exactamente idénticas para Técnico y Administrador) */}
@@ -394,6 +427,13 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
           )}
         </div>
       </div>
+
+      {trackingAlert && (
+        <LiveTrackingModal
+          alert={trackingAlert}
+          onClose={() => setTrackingAlert(null)}
+        />
+      )}
     </div>
   );
 };

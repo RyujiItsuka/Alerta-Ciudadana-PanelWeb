@@ -7,7 +7,9 @@ import {
   Smartphone, 
   ExternalLink,
   Navigation,
-  CheckCircle2
+  CheckCircle2,
+  Calendar,
+  X
 } from 'lucide-react';
 import type { AlertaReporte } from '../types';
 
@@ -23,7 +25,13 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
   selectedAlertId,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [filterType, setFilterType] = useState<'all' | 'active' | 'attended' | 'false_alarm'>('all');
+
+  const countAll = alerts.length;
+  const countActive = alerts.filter(a => a.id_estado === 1 || a.id_estado === 2).length;
+  const countAttended = alerts.filter(a => a.id_estado === 3).length;
+  const countFalseAlarm = alerts.filter(a => a.id_estado === 4).length;
 
   const filtered = alerts.filter((a) => {
     const q = searchTerm.toLowerCase();
@@ -35,12 +43,36 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
 
     if (!matchSearch) return false;
 
+    if (selectedDate) {
+      const alertDate = new Date(a.fecha_hora);
+      const year = alertDate.getFullYear();
+      const month = String(alertDate.getMonth() + 1).padStart(2, '0');
+      const day = String(alertDate.getDate()).padStart(2, '0');
+      const alertDateStr = `${year}-${month}-${day}`;
+      if (alertDateStr !== selectedDate) return false;
+    }
+
     if (filterType === 'all') return true;
-    if (filterType === 'robo') return a.tipo_incidencia?.nombre?.toLowerCase().includes('robo');
-    if (filterType === 'panico') return a.tipo_incidencia?.nombre?.toLowerCase().includes('pánico') || a.tipo_incidencia?.nombre?.toLowerCase().includes('general');
-    if (filterType === 'accidente') return a.tipo_incidencia?.nombre?.toLowerCase().includes('accidente');
+    if (filterType === 'active') return a.id_estado === 1 || a.id_estado === 2;
+    if (filterType === 'attended') return a.id_estado === 3;
+    if (filterType === 'false_alarm') return a.id_estado === 4;
     return true;
   });
+
+  const getStatusInfo = (idEstado: number) => {
+    switch (idEstado) {
+      case 1:
+        return { label: 'PENDIENTE', bg: 'rgba(239,68,68,0.2)', text: '#f87171', border: 'rgba(239,68,68,0.4)' };
+      case 2:
+        return { label: 'EN CAMINO', bg: 'rgba(56,189,248,0.2)', text: '#38bdf8', border: 'rgba(56,189,248,0.4)' };
+      case 3:
+        return { label: 'ATENDIDA', bg: 'rgba(16,185,129,0.2)', text: '#34d399', border: 'rgba(16,185,129,0.4)' };
+      case 4:
+        return { label: 'FALSA ALARMA', bg: 'rgba(148,163,184,0.2)', text: '#94a3b8', border: 'rgba(148,163,184,0.4)' };
+      default:
+        return { label: 'DESCONOCIDO', bg: 'rgba(255,255,255,0.1)', text: 'white', border: 'transparent' };
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
@@ -49,7 +81,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
         <div>
           <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <BellRing size={20} />
-            Alertas App — Centro Receptor de Alertas Ciudadanas
+            Historial de Alertas — Registro Central de Alertas Ciudadanas
             <span style={{
               fontSize: '11px',
               padding: '2px 8px',
@@ -59,17 +91,18 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
               border: '1px solid rgba(239,68,68,0.4)',
               fontWeight: 700,
             }}>
-              TODOS LOS USUARIOS
+              HISTORIAL GENERAL
             </span>
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Bandeja unificada con todas las alertas disparadas por los usuarios desde la aplicación móvil o WhatsApp
+            Auditoría y registro unificado de alertas disparadas por los ciudadanos desde la aplicación móvil o WhatsApp
           </p>
         </div>
 
         {/* Buscador & Filtros */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '520px', justifyContent: 'flex-end' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '700px', justifyContent: 'flex-end' }}>
+          {/* Campo de búsqueda */}
+          <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
             <input
               type="text"
               placeholder="Buscar por DNI, Nombre o tipo..."
@@ -89,6 +122,50 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
             <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
           </div>
 
+          {/* Filtro por Fecha */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                title="Filtrar alertas por fecha"
+                style={{
+                  padding: '7px 10px 7px 32px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  background: 'rgba(0,0,0,0.3)',
+                  color: 'white',
+                  fontSize: '13px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  colorScheme: 'dark',
+                }}
+              />
+              <Calendar size={15} style={{ position: 'absolute', left: '10px', color: 'var(--text-dim)', pointerEvents: 'none' }} />
+            </div>
+            {selectedDate && (
+              <button
+                onClick={() => setSelectedDate('')}
+                title="Limpiar fecha"
+                style={{
+                  background: 'rgba(239,68,68,0.2)',
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  color: '#f87171',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Botones de Estado */}
           <div className="filters-scroll-row">
             <button
               onClick={() => setFilterType('all')}
@@ -104,10 +181,10 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                 color: filterType === 'all' ? 'black' : 'var(--text-muted)',
               }}
             >
-              Todas ({alerts.length})
+              Todas ({countAll})
             </button>
             <button
-              onClick={() => setFilterType('robo')}
+              onClick={() => setFilterType('active')}
               style={{
                 padding: '6px 12px',
                 borderRadius: '6px',
@@ -116,11 +193,43 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 border: '1px solid rgba(239,68,68,0.3)',
-                background: filterType === 'robo' ? '#ef4444' : 'rgba(239,68,68,0.1)',
-                color: filterType === 'robo' ? 'white' : '#fca5a5',
+                background: filterType === 'active' ? '#ef4444' : 'rgba(239,68,68,0.1)',
+                color: filterType === 'active' ? 'white' : '#fca5a5',
               }}
             >
-              Robo / Arrebato
+              Activas ({countActive})
+            </button>
+            <button
+              onClick={() => setFilterType('attended')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                border: '1px solid rgba(16,185,129,0.3)',
+                background: filterType === 'attended' ? '#10b981' : 'rgba(16,185,129,0.1)',
+                color: filterType === 'attended' ? 'white' : '#6ee7b7',
+              }}
+            >
+              Atendidas ({countAttended})
+            </button>
+            <button
+              onClick={() => setFilterType('false_alarm')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                border: '1px solid rgba(148,163,184,0.3)',
+                background: filterType === 'false_alarm' ? '#64748b' : 'rgba(148,163,184,0.1)',
+                color: filterType === 'false_alarm' ? 'white' : '#cbd5e1',
+              }}
+            >
+              Falsa Alarma ({countFalseAlarm})
             </button>
           </div>
         </div>
@@ -174,16 +283,22 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                       </span>
                     </div>
 
-                    <span style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      background: a.id_estado === 1 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
-                      color: a.id_estado === 1 ? '#f87171' : '#34d399',
-                    }}>
-                      {a.id_estado === 1 ? 'ACTIVA' : 'ATENDIDA'}
-                    </span>
+                    {(() => {
+                      const st = getStatusInfo(a.id_estado);
+                      return (
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: st.bg,
+                          color: st.text,
+                          border: `1px solid ${st.border}`,
+                        }}>
+                          {st.label}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <p style={{ fontSize: '13px', color: '#f1f5f9', marginBottom: '10px', lineHeight: '1.4' }}>
@@ -232,7 +347,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
               if (!current) return null;
               const lat = current.ubicacion?.latitud || -13.7142;
               const lon = current.ubicacion?.longitud || -76.2038;
-              const gmapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+              const gmapsPinUrl = `https://www.google.com/maps?q=${lat},${lon}`;
 
               return (
                 <>
@@ -286,7 +401,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                   {/* Acceso a GPS */}
                   <div style={{ marginTop: 'auto' }}>
                     <a
-                      href={gmapsNavUrl}
+                      href={gmapsPinUrl}
                       target="_blank"
                       rel="noreferrer"
                       style={{
@@ -306,7 +421,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                       }}
                     >
                       <Navigation size={16} />
-                      Rastrear y Navegar a Coordenadas (Google Maps)
+                      Ver Ubicación de la Alerta (Google Maps)
                       <ExternalLink size={14} />
                     </a>
                   </div>

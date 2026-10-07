@@ -182,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }}
         >
           <BellRing size={18} />
-          <span>Alertas App</span>
+          <span>Historial de Alertas</span>
         </button>
 
         {/* Pestañas Exclusivas del Administrador */}
