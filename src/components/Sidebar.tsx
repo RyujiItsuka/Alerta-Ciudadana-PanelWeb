@@ -11,6 +11,7 @@ import {
   UserCog,
   ShieldCheck,
   Crown,
+  Server,
   X
 } from 'lucide-react';
 import type { UserSession } from '../types';
@@ -199,6 +200,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* MENÚ DE SUPERADMINISTRADOR */}
         {isSuperAdmin && (
           <>
+            <button
+              onClick={() => onTabChange('dashboard')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentTab === 'dashboard' ? '#f59e0b' : 'transparent',
+                color: currentTab === 'dashboard' ? '#000000' : 'var(--text-muted)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <Server size={18} />
+              <span>Estado del Sistema</span>
+            </button>
+
             <button
               onClick={() => onTabChange('administradores')}
               style={{

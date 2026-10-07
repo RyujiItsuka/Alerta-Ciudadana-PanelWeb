@@ -12,6 +12,7 @@ import { CitizensManagement } from './components/CitizensManagement';
 import { TechnicianCalibration } from './components/TechnicianCalibration';
 import { TechnicianDiagnostics } from './components/TechnicianDiagnostics';
 import { LiveTrackingModal } from './components/LiveTrackingModal';
+import { SystemHealthDashboard } from './components/SystemHealthDashboard';
 
 export function App() {
   // Persistencia de sesión en localStorage para no regresar al login al recargar
@@ -29,7 +30,7 @@ export function App() {
       const saved = localStorage.getItem('alerta_ciudadana_session');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.rol === 'superadmin') return 'administradores';
+        if (parsed.rol === 'superadmin') return 'dashboard';
       }
     } catch {
       // ignore
@@ -43,7 +44,7 @@ export function App() {
       if (newSession) {
         localStorage.setItem('alerta_ciudadana_session', JSON.stringify(newSession));
         if (newSession.rol === 'superadmin') {
-          setCurrentTab('administradores');
+          setCurrentTab('dashboard');
         } else {
           setCurrentTab('alertas');
         }
@@ -225,7 +226,7 @@ export function App() {
   // Asegurar que superadmin no quede posicionado en vistas operativas de alertas
   useEffect(() => {
     if (session?.rol === 'superadmin' && (currentTab === 'alertas' || currentTab === 'alertas_app')) {
-      setCurrentTab('administradores');
+      setCurrentTab('dashboard');
     }
   }, [session?.rol, currentTab]);
 
@@ -594,6 +595,15 @@ export function App() {
 
       {/* Área Principal de Trabajo */}
       <main className="main-content">
+        {/* 0. Estado del Sistema & Servidores Cloud (Exclusivo Superadmin - Pantalla de Inicio) */}
+        {currentTab === 'dashboard' && isSuperAdmin && (
+          <SystemHealthDashboard
+            totalAdmins={administrators.length}
+            totalTechnicians={technicians.length}
+            totalCitizens={citizens.length}
+          />
+        )}
+
         {/* 1. Despacho & Alertas (Exclusivo Administrador y Técnico - Oculto para Superadmin) */}
         {currentTab === 'alertas' && !isSuperAdmin && (
           <AlertsPanel
