@@ -248,10 +248,43 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
           flexDirection: 'column',
           gap: '16px',
         }}>
-          {selectedAlertId ? (
-            (() => {
-              const current = alerts.find((x) => x.id_reporte === selectedAlertId);
-              if (!current) return null;
+          {(() => {
+            const current = filteredAlerts.find((x) => x.id_reporte === selectedAlertId) || (selectedAlertId === null ? filteredAlerts[0] : null);
+            if (!current) {
+              if (filteredAlerts.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', margin: 'auto', padding: '40px 20px', color: 'var(--text-dim)' }}>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      background: 'rgba(16, 185, 129, 0.1)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px',
+                      color: '#10b981',
+                      boxShadow: '0 0 20px rgba(16, 185, 129, 0.2)'
+                    }}>
+                      <CheckCircle2 size={32} />
+                    </div>
+                    <h3 style={{ color: 'white', fontSize: '16px', fontWeight: 700, marginBottom: '6px' }}>
+                      Central de Monitoreo Despejada
+                    </h3>
+                    <p style={{ fontSize: '13px', maxWidth: '320px', margin: '0 auto', color: '#94a3b8', lineHeight: '1.5' }}>
+                      No hay alertas pendientes de despacho en este momento. Todas las incidencias han sido atendidas o descartadas.
+                    </p>
+                  </div>
+                );
+              }
+              return (
+                <div style={{ textAlign: 'center', margin: 'auto', color: 'var(--text-dim)' }}>
+                  <Navigation size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                  <p>Selecciona una alerta del listado para ver su telemetría y despacho táctico.</p>
+                </div>
+              );
+            }
               const lat = current.ubicacion?.latitud || -13.7142;
               const lon = current.ubicacion?.longitud || -76.2038;
               const gmapsPointUrl = `https://www.google.com/maps?q=${lat},${lon}`;
@@ -419,13 +452,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                   </div>
                 </>
               );
-            })()
-          ) : (
-            <div style={{ textAlign: 'center', margin: 'auto', color: 'var(--text-dim)' }}>
-              <Navigation size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
-              <p>Selecciona una alerta del listado para ver su telemetría y despacho táctico.</p>
-            </div>
-          )}
+            })()}
         </div>
       </div>
 
