@@ -9,7 +9,8 @@ import {
   Navigation,
   CheckCircle2,
   Calendar,
-  X
+  X,
+  Radio
 } from 'lucide-react';
 import type { AlertaReporte } from '../types';
 
@@ -348,6 +349,10 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
               const lat = current.ubicacion?.latitud || -13.7142;
               const lon = current.ubicacion?.longitud || -76.2038;
               const gmapsPinUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+              const isRobo =
+                current.tipo_incidencia?.nombre?.toLowerCase().includes('robo') ||
+                current.descripcion?.toLowerCase().includes('robo') ||
+                current.descripcion?.toLowerCase().includes('arrebato');
 
               return (
                 <>
@@ -399,7 +404,37 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                   </div>
 
                   {/* Acceso a GPS */}
-                  <div style={{ marginTop: 'auto' }}>
+                  <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {isRobo && (
+                      <button
+                        onClick={() => {
+                          const trackingUrl = `${window.location.origin}${window.location.pathname}?tracking=${current.id_reporte}`;
+                          window.open(trackingUrl, `tracking_${current.id_reporte}`, 'width=1280,height=820,menubar=no,status=no,toolbar=no');
+                        }}
+                        style={{
+                          width: '100%',
+                          background: '#dc2626',
+                          color: 'white',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          boxShadow: '0 0 14px rgba(220,38,38,0.4)',
+                        }}
+                        title="Abrir seguimiento GPS en ventana independiente del navegador"
+                      >
+                        <Radio size={16} />
+                        🔴 SEGUIMIENTO GPS EN VIVO
+                        <ExternalLink size={14} />
+                      </button>
+                    )}
+
                     <a
                       href={gmapsPinUrl}
                       target="_blank"

@@ -299,7 +299,10 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
 
                     {isRobo && (
                       <button
-                        onClick={() => setTrackingAlert(current)}
+                        onClick={() => {
+                          const trackingUrl = `${window.location.origin}${window.location.pathname}?tracking=${current.id_reporte}`;
+                          window.open(trackingUrl, `tracking_${current.id_reporte}`, 'width=1280,height=820,menubar=no,status=no,toolbar=no');
+                        }}
                         style={{
                           flex: 1,
                           minWidth: '180px',
@@ -317,9 +320,11 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                           gap: '6px',
                           boxShadow: '0 0 14px rgba(220,38,38,0.5)',
                         }}
+                        title="Abrir seguimiento GPS en ventana independiente del navegador para monitorear múltiples incidentes a la vez"
                       >
                         <Radio size={14} />
                         🔴 SEGUIMIENTO GPS EN VIVO
+                        <ExternalLink size={12} />
                       </button>
                     )}
                   </div>

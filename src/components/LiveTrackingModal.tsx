@@ -8,6 +8,7 @@ import type { AlertaReporte } from '../types';
 interface LiveTrackingModalProps {
   alert: AlertaReporte;
   onClose: () => void;
+  isStandalone?: boolean;
 }
 
 interface UbicacionPoint {
@@ -18,7 +19,7 @@ interface UbicacionPoint {
   fecha_hora?: string;
 }
 
-export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onClose }) => {
+export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onClose, isStandalone = false }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -213,24 +214,27 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
       position: 'fixed',
       inset: 0,
       zIndex: 9999,
-      background: 'rgba(0,0,0,0.85)',
-      backdropFilter: 'blur(8px)',
+      background: isStandalone ? '#0B0E14' : 'rgba(0,0,0,0.85)',
+      backdropFilter: isStandalone ? 'none' : 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '16px',
+      padding: isStandalone ? 0 : '16px',
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
     }}>
       <div style={{
         background: '#0B0E14',
-        border: '1px solid #ef4444',
-        borderRadius: '16px',
+        border: isStandalone ? 'none' : '1px solid #ef4444',
+        borderRadius: isStandalone ? 0 : '16px',
         width: '100%',
-        maxWidth: '1200px',
-        height: '90vh',
+        maxWidth: isStandalone ? '100%' : '1200px',
+        height: isStandalone ? '100vh' : '90vh',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        boxShadow: '0 25px 50px -12px rgba(239, 68, 68, 0.35)',
+        boxShadow: isStandalone ? 'none' : '0 25px 50px -12px rgba(239, 68, 68, 0.35)',
       }}>
         {/* Modal Header */}
         <div style={{
@@ -306,22 +310,53 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
               <ExternalLink size={12} />
             </a>
 
+            {!isStandalone && (
+              <button
+                onClick={() => {
+                  const trackingUrl = `${window.location.origin}${window.location.pathname}?tracking=${alert.id_reporte}`;
+                  window.open(trackingUrl, `tracking_${alert.id_reporte}`, 'width=1280,height=820,menubar=no,status=no,toolbar=no');
+                  onClose();
+                }}
+                style={{
+                  background: 'rgba(239,68,68,0.2)',
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  color: '#f87171',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+                title="Abrir en ventana independiente del navegador"
+              >
+                <ExternalLink size={14} />
+                Ventana Nueva
+              </button>
+            )}
+
             <button
               onClick={onClose}
               style={{
                 background: 'rgba(255,255,255,0.08)',
                 border: '1px solid var(--border-color)',
                 color: 'white',
-                padding: '8px',
+                padding: '8px 12px',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
               }}
-              title="Cerrar ventana de seguimiento"
+              title={isStandalone ? 'Cerrar esta ventana' : 'Cerrar ventana de seguimiento'}
             >
               <X size={18} />
+              {isStandalone && <span>Cerrar</span>}
             </button>
           </div>
         </div>

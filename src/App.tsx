@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, ShieldAlert } from 'lucide-react';
+import { Menu, ShieldAlert, Radio } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { UserSession, AlertaReporte, CiudadanoItem, TecnicoItem, SystemConfig } from './types';
 import { LoginView } from './components/LoginView';
@@ -10,6 +10,7 @@ import { TechniciansManagement } from './components/TechniciansManagement';
 import { CitizensManagement } from './components/CitizensManagement';
 import { TechnicianCalibration } from './components/TechnicianCalibration';
 import { TechnicianDiagnostics } from './components/TechnicianDiagnostics';
+import { LiveTrackingModal } from './components/LiveTrackingModal';
 
 export function App() {
   // Persistencia de sesión en localStorage para no regresar al login al recargar
@@ -272,6 +273,133 @@ export function App() {
   const handleResetPin = (dni: string) => {
     alert(`Se ha generado un código de restablecimiento seguro para el DNI ${dni} y se envió a su WhatsApp.`);
   };
+
+  // Detección de ventana independiente de Seguimiento GPS en Vivo (?tracking=ID)
+  const trackingParam = new URLSearchParams(window.location.search).get('tracking');
+  const [standaloneAlert, setStandaloneAlert] = useState<AlertaReporte | null>(null);
+  const [standaloneLoading, setStandaloneLoading] = useState<boolean>(!!trackingParam);
+  const [standaloneError, setStandaloneError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!trackingParam) return;
+    const fetchStandaloneAlert = async () => {
+      setStandaloneLoading(true);
+      setStandaloneError(null);
+      try {
+        const { data, error } = await supabase
+          .from('reporte')
+          .select(`
+            id_reporte,
+            descripcion,
+            fecha_hora,
+            id_estado,
+            direccion_texto,
+            tipo_incidencia (nombre),
+            ubicacion (latitud, longitud),
+            persona (nombres, apellidos, telefono, dni)
+          `)
+          .eq('id_reporte', Number(trackingParam))
+          .single();
+
+        if (error || !data) {
+          setStandaloneError('No se encontró la alerta de rastreo o la señal fue finalizada.');
+        } else {
+          const item: any = data;
+          const ubi = Array.isArray(item.ubicacion) && item.ubicacion.length > 0 ? item.ubicacion[0] : (item.ubicacion || null);
+          const formatted: AlertaReporte = {
+            id_reporte: item.id_reporte,
+            descripcion: item.descripcion || 'Sin descripción',
+            fecha_hora: item.fecha_hora || new Date().toISOString(),
+            id_estado: item.id_estado || 1,
+            tipo_incidencia: item.tipo_incidencia || { nombre: 'EMERGENCIA GENERAL' },
+            ubicacion: {
+              latitud: ubi?.latitud ?? -13.7142,
+              longitud: ubi?.longitud ?? -76.2038,
+              direccion_texto: item.direccion_texto || 'Ubicación móvil GPS (Pisco)',
+            },
+            ciudadano: item.persona || { nombres: 'Ciudadano', apellidos: '', telefono: '976264949', dni: '00000000' },
+          };
+          setStandaloneAlert(formatted);
+          document.title = `🔴 GPS en Vivo - Incidente #${formatted.id_reporte} (${formatted.ciudadano?.nombres || ''})`;
+        }
+      } catch (err) {
+        setStandaloneError('Error al sincronizar con el servidor.');
+      } finally {
+        setStandaloneLoading(false);
+      }
+    };
+    fetchStandaloneAlert();
+  }, [trackingParam]);
+
+  // Si la ventana fue abierta como monitor independiente de rastreo
+  if (trackingParam) {
+    if (standaloneLoading) {
+      return (
+        <div style={{
+          height: '100vh',
+          width: '100vw',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0B0E14',
+          color: 'white',
+          gap: '16px',
+        }}>
+          <Radio size={48} color="#ef4444" style={{ animation: 'pulse 1.5s infinite' }} />
+          <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Conectando con señal GPS en vivo del Incidente #{trackingParam}...</h2>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Cargando telemetría del dispositivo móvil...</p>
+        </div>
+      );
+    }
+
+    if (standaloneError || !standaloneAlert) {
+      return (
+        <div style={{
+          height: '100vh',
+          width: '100vw',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0B0E14',
+          color: 'white',
+          gap: '16px',
+          padding: '20px',
+          textAlign: 'center',
+        }}>
+          <ShieldAlert size={56} color="#f87171" />
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#f87171' }}>Incidente no disponible</h2>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '420px' }}>
+            {standaloneError || `No se pudo encontrar el reporte #${trackingParam} o la transmisión ya fue finalizada.`}
+          </p>
+          <button
+            onClick={() => window.close()}
+            style={{
+              padding: '10px 20px',
+              background: '#2563eb',
+              color: 'white',
+              borderRadius: '8px',
+              border: 'none',
+              fontWeight: 700,
+              cursor: 'pointer',
+              marginTop: '10px',
+            }}
+          >
+            Cerrar Ventana
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <LiveTrackingModal
+        alert={standaloneAlert}
+        isStandalone={true}
+        onClose={() => window.close()}
+      />
+    );
+  }
 
   if (!session) {
     return <LoginView onLogin={(sess) => handleSetSession(sess)} />;
