@@ -37,7 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Tema de color según el rol
   const themeColor = isSuperAdmin ? '#f59e0b' : isAdmin ? '#dc2626' : '#0284c7';
-  const themeBgActive = isSuperAdmin ? '#d97706' : isAdmin ? '#dc2626' : '#0284c7';
+  const themeBgActive = isSuperAdmin ? '#f59e0b' : isAdmin ? '#dc2626' : '#0284c7';
 
   return (
     <aside style={{
@@ -74,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ALERTA CIUDADANA
           </h2>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            {isSuperAdmin ? 'Soporte & Dev Total' : isAdmin ? 'Administración Central' : 'Técnico de Central'}
+            {isSuperAdmin ? 'Superusuario' : isAdmin ? 'Administración Central' : 'Técnico de Central'}
           </span>
         </div>
         {onCloseMobile && (
@@ -119,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             textTransform: 'uppercase',
             letterSpacing: '0.5px'
           }}>
-            {isSuperAdmin ? 'SUPERADMIN (SOPORTE)' : isAdmin ? 'ADMINISTRADOR' : 'TÉCNICO DE CENTRAL'}
+            {isSuperAdmin ? 'SUPERADMINISTRADOR' : isAdmin ? 'ADMINISTRADOR' : 'TÉCNICO DE CENTRAL'}
           </span>
         </div>
         <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginTop: '4px' }}>
@@ -132,92 +132,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Menu */}
       <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto' }}>
-        {/* 1. Despacho & Alertas (Disponible para todos) */}
-        <button
-          onClick={() => onTabChange('alertas')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '12px 14px',
-            borderRadius: '8px',
-            border: 'none',
-            background: currentTab === 'alertas' ? themeBgActive : 'transparent',
-            color: currentTab === 'alertas' ? (isSuperAdmin ? '#000000' : 'white') : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '13px',
-            cursor: 'pointer',
-            textAlign: 'left',
-            transition: 'all 0.15s',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Radio size={18} />
-            <span>Despacho & Alertas</span>
-          </div>
-          {activeAlertsCount > 0 && (
-            <span style={{
-              background: '#ef4444',
-              color: 'white',
-              fontSize: '11px',
-              padding: '2px 7px',
-              borderRadius: '999px',
-              fontWeight: 800,
-              animation: 'pulse-dot 1.5s infinite',
-            }}>
-              {activeAlertsCount}
-            </span>
-          )}
-        </button>
-
-        {/* 2. Historial de Alertas (Disponible para todos) */}
-        <button
-          onClick={() => onTabChange('alertas_app')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '12px 14px',
-            borderRadius: '8px',
-            border: 'none',
-            background: currentTab === 'alertas_app' ? themeBgActive : 'transparent',
-            color: currentTab === 'alertas_app' ? (isSuperAdmin ? '#000000' : 'white') : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '13px',
-            cursor: 'pointer',
-            textAlign: 'left',
-          }}
-        >
-          <BellRing size={18} />
-          <span>Historial de Alertas</span>
-        </button>
-
-        {/* 3. Técnicos & Ciudadanos (Visible para Superadmin y Administrador) */}
-        {(isSuperAdmin || isAdmin) && (
+        
+        {/* MENÚ OPERATIVO (Solo para Administradores Municipales y Técnicos de Cámaras) */}
+        {!isSuperAdmin && (
           <>
             <button
-              onClick={() => onTabChange('tecnicos')}
+              onClick={() => onTabChange('alertas')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
+                justifyContent: 'space-between',
                 padding: '12px 14px',
                 borderRadius: '8px',
                 border: 'none',
-                background: currentTab === 'tecnicos' ? themeBgActive : 'transparent',
-                color: currentTab === 'tecnicos' ? (isSuperAdmin ? '#000000' : 'white') : 'var(--text-muted)',
+                background: currentTab === 'alertas' ? themeBgActive : 'transparent',
+                color: currentTab === 'alertas' ? 'white' : 'var(--text-muted)',
                 fontWeight: 600,
                 fontSize: '13px',
                 cursor: 'pointer',
                 textAlign: 'left',
+                transition: 'all 0.15s',
               }}
             >
-              <UserCog size={18} />
-              <span>Gestión de Técnicos</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Radio size={18} />
+                <span>Despacho & Alertas</span>
+              </div>
+              {activeAlertsCount > 0 && (
+                <span style={{
+                  background: '#ef4444',
+                  color: 'white',
+                  fontSize: '11px',
+                  padding: '2px 7px',
+                  borderRadius: '999px',
+                  fontWeight: 800,
+                  animation: 'pulse-dot 1.5s infinite',
+                }}>
+                  {activeAlertsCount}
+                </span>
+              )}
             </button>
 
             <button
-              onClick={() => onTabChange('ciudadanos')}
+              onClick={() => onTabChange('alertas_app')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -225,36 +182,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 padding: '12px 14px',
                 borderRadius: '8px',
                 border: 'none',
-                background: currentTab === 'ciudadanos' ? themeBgActive : 'transparent',
-                color: currentTab === 'ciudadanos' ? (isSuperAdmin ? '#000000' : 'white') : 'var(--text-muted)',
+                background: currentTab === 'alertas_app' ? themeBgActive : 'transparent',
+                color: currentTab === 'alertas_app' ? 'white' : 'var(--text-muted)',
                 fontWeight: 600,
                 fontSize: '13px',
                 cursor: 'pointer',
                 textAlign: 'left',
               }}
             >
-              <Users size={18} />
-              <span>Gestión de Ciudadanos</span>
+              <BellRing size={18} />
+              <span>Historial de Alertas</span>
             </button>
           </>
         )}
 
-        {/* 4. SECCIÓN EXCLUSIVA DE SUPERADMIN (SOPORTE Y DESARROLLADORES) */}
+        {/* MENÚ DE SUPERADMINISTRADOR */}
         {isSuperAdmin && (
           <>
-            <div style={{
-              margin: '12px 6px 6px',
-              paddingTop: '8px',
-              borderTop: '1px dashed rgba(245, 158, 11, 0.3)',
-              fontSize: '10px',
-              fontWeight: 800,
-              color: '#f59e0b',
-              textTransform: 'uppercase',
-              letterSpacing: '0.8px'
-            }}>
-              Control Exclusivo Soporte
-            </div>
-
             <button
               onClick={() => onTabChange('administradores')}
               style={{
@@ -274,6 +218,48 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <ShieldCheck size={18} />
               <span>Gestión de Administradores</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('tecnicos')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentTab === 'tecnicos' ? '#f59e0b' : 'transparent',
+                color: currentTab === 'tecnicos' ? '#000000' : 'var(--text-muted)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <UserCog size={18} />
+              <span>Gestión de Técnicos</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('ciudadanos')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentTab === 'ciudadanos' ? '#f59e0b' : 'transparent',
+                color: currentTab === 'ciudadanos' ? '#000000' : 'var(--text-muted)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <Users size={18} />
+              <span>Gestión de Ciudadanos</span>
             </button>
 
             <button
@@ -316,6 +302,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Activity size={18} />
               <span>Auditoría & WhatsApp</span>
+            </button>
+          </>
+        )}
+
+        {/* TÉCNICOS & CIUDADANOS PARA ADMINISTRADOR MUNICIPAL */}
+        {isAdmin && (
+          <>
+            <button
+              onClick={() => onTabChange('tecnicos')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentTab === 'tecnicos' ? themeBgActive : 'transparent',
+                color: currentTab === 'tecnicos' ? 'white' : 'var(--text-muted)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <UserCog size={18} />
+              <span>Gestión de Técnicos</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('ciudadanos')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentTab === 'ciudadanos' ? themeBgActive : 'transparent',
+                color: currentTab === 'ciudadanos' ? 'white' : 'var(--text-muted)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <Users size={18} />
+              <span>Gestión de Ciudadanos</span>
             </button>
           </>
         )}

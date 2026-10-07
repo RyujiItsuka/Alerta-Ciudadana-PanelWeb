@@ -24,20 +24,37 @@ export function App() {
     }
   });
 
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('alerta_ciudadana_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rol === 'superadmin') return 'administradores';
+      }
+    } catch {
+      // ignore
+    }
+    return 'alertas';
+  });
+
   const handleSetSession = (newSession: UserSession | null) => {
     setSession(newSession);
     try {
       if (newSession) {
         localStorage.setItem('alerta_ciudadana_session', JSON.stringify(newSession));
+        if (newSession.rol === 'superadmin') {
+          setCurrentTab('administradores');
+        } else {
+          setCurrentTab('alertas');
+        }
       } else {
         localStorage.removeItem('alerta_ciudadana_session');
+        setCurrentTab('alertas');
       }
     } catch {
       // ignore
     }
   };
-
-  const [currentTab, setCurrentTab] = useState<string>('alertas');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [alerts, setAlerts] = useState<AlertaReporte[]>([]);
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null);
@@ -204,6 +221,13 @@ export function App() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Asegurar que superadmin no quede posicionado en vistas operativas de alertas
+  useEffect(() => {
+    if (session?.rol === 'superadmin' && (currentTab === 'alertas' || currentTab === 'alertas_app')) {
+      setCurrentTab('administradores');
+    }
+  }, [session?.rol, currentTab]);
 
   // Cambio de estado de alerta (Despacho de patrulla, resolución, etc.)
   const handleUpdateStatus = async (alertId: number, newStatusId: number, _statusName: string) => {
@@ -570,8 +594,8 @@ export function App() {
 
       {/* Área Principal de Trabajo */}
       <main className="main-content">
-        {/* 1. Despacho & Alertas (Idéntico para todos los roles) */}
-        {currentTab === 'alertas' && (
+        {/* 1. Despacho & Alertas (Exclusivo Administrador y Técnico - Oculto para Superadmin) */}
+        {currentTab === 'alertas' && !isSuperAdmin && (
           <AlertsPanel
             alerts={alerts}
             session={session}
@@ -581,8 +605,8 @@ export function App() {
           />
         )}
 
-        {/* 2. Historial de Alertas (Disponible para todos) */}
-        {currentTab === 'alertas_app' && (
+        {/* 2. Historial de Alertas (Exclusivo Administrador y Técnico - Oculto para Superadmin) */}
+        {currentTab === 'alertas_app' && !isSuperAdmin && (
           <AppAlertsFeed
             alerts={alerts}
             onSelectAlert={(a) => setSelectedAlertId(a.id_reporte)}

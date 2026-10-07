@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, UserCheck, Lock, ArrowRight, User, Crown } from 'lucide-react';
+import { Shield, Lock, ArrowRight, User } from 'lucide-react';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../lib/supabase';
 import type { UserSession } from '../types';
@@ -9,7 +9,6 @@ interface LoginModalProps {
 }
 
 export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
-  const [selectedRole, setSelectedRole] = useState<'superadmin' | 'administrador' | 'tecnico'>('administrador');
   const [dniOrUser, setDniOrUser] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,66 +22,58 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
     const cleanPass = password.trim();
 
     if (!cleanInput || !cleanPass) {
-      setError('Por favor ingrese su usuario y su contraseña');
+      setError('Por favor ingrese su usuario y contraseña');
       return;
     }
 
     setLoading(true);
 
     try {
-      // CASO A: ROL SUPERADMIN (SOPORTE Y DESARROLLO DE ALERTA CIUDADANA)
-      if (selectedRole === 'superadmin') {
-        // 1. Consultar tabla aislada de soporte
-        const { data: soporteData, error: sopError } = await supabase
-          .from('cuenta_soporte')
-          .select('*')
-          .eq('usuario', cleanInput)
-          .maybeSingle();
+      // 1. INTENTO DE AUTENTICACIÓN: SUPERADMIN (CUENTA DE SOPORTE / DEV)
+      const { data: soporteData, error: sopError } = await supabase
+        .from('cuenta_soporte')
+        .select('*')
+        .eq('usuario', cleanInput)
+        .maybeSingle();
 
+      if (!sopError && soporteData && soporteData.activo !== false) {
         let passValida = false;
-        if (!sopError && soporteData && soporteData.activo) {
-          if (soporteData.password_hash?.startsWith('$2a$') || soporteData.password_hash?.startsWith('$2b$')) {
-            try {
-              passValida = bcrypt.compareSync(cleanPass, soporteData.password_hash);
-            } catch (_) {}
-          }
-          if (!passValida && cleanPass === soporteData.password_hash) {
-            passValida = true;
-          }
-
-          if (passValida) {
-            onLogin({
-              id: `SOP-${soporteData.id_soporte}`,
-              nombre: soporteData.nombre_completo || 'Soporte Alerta Ciudadana',
-              usuario: soporteData.usuario,
-              rol: 'superadmin',
-              cargo: 'Soporte Global & Desarrollador Alerta Ciudadana',
-            });
-            setLoading(false);
-            return;
-          }
+        if (soporteData.password_hash?.startsWith('$2a$') || soporteData.password_hash?.startsWith('$2b$')) {
+          try {
+            passValida = bcrypt.compareSync(cleanPass, soporteData.password_hash);
+          } catch (_) {}
+        }
+        if (!passValida && cleanPass === soporteData.password_hash) {
+          passValida = true;
         }
 
-        // Bypass maestro de contingencia para superadmin
-        if (cleanInput === 'soporte' && cleanPass === 'Soporte@2026Dev!') {
+        if (passValida) {
           onLogin({
-            id: 'SOP-001',
-            nombre: 'Soporte de Alerta Ciudadana',
-            usuario: 'soporte',
+            id: `SOP-${soporteData.id_soporte}`,
+            nombre: soporteData.nombre_completo || 'Soporte Alerta Ciudadana',
+            usuario: soporteData.usuario,
             rol: 'superadmin',
-            cargo: 'Soporte Global & Desarrollador Alerta Ciudadana',
+            cargo: 'Soporte Técnico & Desarrollador',
           });
           setLoading(false);
           return;
         }
+      }
 
-        setError('Credenciales de Soporte incorrectas o cuenta inactiva.');
+      // Bypass de contingencia para cuenta superadmin
+      if (cleanInput.toLowerCase() === 'soporte' && cleanPass === 'Soporte@2026Dev!') {
+        onLogin({
+          id: 'SOP-001',
+          nombre: 'Soporte de Alerta Ciudadana',
+          usuario: 'soporte',
+          rol: 'superadmin',
+          cargo: 'Soporte Técnico & Desarrollador',
+        });
         setLoading(false);
         return;
       }
 
-      // CASO B: ADMINISTRADORES Y TÉCNICOS
-      // 1. Consultar prioritariamente tabla de personal operador_central (encriptada con bcrypt)
+      // 2. INTENTO DE AUTENTICACIÓN: OPERADOR CENTRAL (ADMINISTRADOR O TÉCNICO)
       const { data: operador, error: opError } = await supabase
         .from('operador_central')
         .select('*')
@@ -90,45 +81,47 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         .maybeSingle();
 
       if (!opError && operador) {
-        const rolOp = (operador.rol || '').toLowerCase().trim();
-        const expectedRole = selectedRole === 'administrador' ? ['admin', 'administrador'] : ['tecnico'];
-
-        if (!expectedRole.includes(rolOp)) {
-          setError(`Acceso denegado: Tu usuario tiene rol de ${rolOp} y no coincide con el perfil seleccionado.`);
+        if (operador.estado === 'suspendido' || operador.estado === 'inactivo') {
+          setError('Tu cuenta se encuentra suspendida o inactiva.');
           setLoading(false);
           return;
         }
 
-        let passwordValida = false;
+        let passValida = false;
         if (operador.password_hash?.startsWith('$2a$') || operador.password_hash?.startsWith('$2b$')) {
           try {
-            passwordValida = bcrypt.compareSync(cleanPass, operador.password_hash);
+            passValida = bcrypt.compareSync(cleanPass, operador.password_hash);
           } catch (_) {}
         }
-        if (!passwordValida && (cleanPass === operador.password_hash || cleanPass === 'Pisco@Segura2026!')) {
-          passwordValida = true;
+        if (!passValida && (cleanPass === operador.password_hash || cleanPass === 'Pisco@Segura2026!')) {
+          passValida = true;
         }
 
-        if (!passwordValida) {
+        if (passValida) {
+          const rawRol = (operador.rol || '').toLowerCase().trim();
+          const rolFinal: 'administrador' | 'tecnico' = 
+            rawRol === 'admin' || rawRol === 'administrador' ? 'administrador' : 'tecnico';
+
+          onLogin({
+            id: `OP-${operador.id_operador}`,
+            nombre: `${operador.nombres} ${operador.apellidos}`.trim() || operador.usuario,
+            usuario: operador.usuario,
+            rol: rolFinal,
+            cargo: rolFinal === 'administrador' 
+              ? 'Administrador General de Central' 
+              : 'Técnico de Central de Alertas',
+          });
+          setLoading(false);
+          return;
+        } else {
           setError('Contraseña incorrecta.');
           setLoading(false);
           return;
         }
-
-        onLogin({
-          id: `OP-${operador.id_operador}`,
-          nombre: `${operador.nombres} ${operador.apellidos}`.trim() || operador.usuario,
-          usuario: operador.usuario,
-          rol: selectedRole,
-          cargo: selectedRole === 'administrador' ? 'Administrador General de Central' : 'Técnico de Central de Alertas',
-        });
-        setLoading(false);
-        return;
       }
 
-      // Bypass de Administrador maestro por usuario 'admin'
-      const isAdminMaster = selectedRole === 'administrador' && cleanInput === 'admin' && cleanPass === 'Pisco@Segura2026!';
-      if (isAdminMaster) {
+      // Bypass de Administrador maestro de emergencia
+      if (cleanInput.toLowerCase() === 'admin' && cleanPass === 'Pisco@Segura2026!') {
         onLogin({
           id: 'ADM-001',
           nombre: 'Administrador General',
@@ -140,7 +133,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         return;
       }
 
-      // 2. Fallback a tabla persona (para compatibilidad de transición)
+      // 3. FALLBACK: TABLA PERSONA (TRANSICIÓN Y COMPATIBILIDAD)
       const { data: persona, error: dbError } = await supabase
         .from('persona')
         .select('id_persona, dni, nombres, apellidos, telefono, rol, password_hash')
@@ -148,62 +141,48 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         .maybeSingle();
 
       if (dbError || !persona) {
-        setError('Usuario no encontrado en la base de datos');
+        setError('Usuario o contraseña incorrectos.');
         setLoading(false);
         return;
       }
 
       const rolEnBd = (persona.rol || '').toLowerCase().trim();
 
-      // REGLA ESTRICTA 1: Los ciudadanos NO pueden acceder al panel web
+      // REGLA ESTRICTA: Los vecinos/ciudadanos de la app móvil no pueden ingresar al panel web
       if (rolEnBd === 'ciudadano') {
-        setError('Acceso denegado: Tu cuenta tiene rol de Ciudadano y solo está autorizada para la App Móvil.');
+        setError('Acceso denegado: Tu cuenta es de Ciudadano y solo está autorizada para la App Móvil.');
         setLoading(false);
         return;
       }
 
-      // REGLA ESTRICTA 2: Si seleccionó Administrador, debe tener rol admin o administrador
-      if (selectedRole === 'administrador') {
-        if (rolEnBd !== 'admin' && rolEnBd !== 'administrador') {
-          setError(`Acceso denegado: El usuario no tiene rol de Administrador (Tu rol es: ${rolEnBd}).`);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // REGLA ESTRICTA 3: Si seleccionó Técnico, debe tener rol tecnico
-      if (selectedRole === 'tecnico') {
-        if (rolEnBd !== 'tecnico') {
-          setError(`Acceso denegado: El usuario no tiene rol de Técnico (Tu rol es: ${rolEnBd}).`);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Validación de contraseña
-      let passwordValida = false;
+      // Validación de contraseña para administradores o técnicos migrados
+      let passValida = false;
       if (persona.password_hash?.startsWith('$2a$') || persona.password_hash?.startsWith('$2b$')) {
         try {
-          passwordValida = bcrypt.compareSync(cleanPass, persona.password_hash);
+          passValida = bcrypt.compareSync(cleanPass, persona.password_hash);
         } catch (_) {}
       }
-      if (!passwordValida && (cleanPass === persona.password_hash || cleanPass === 'Pisco@Segura2026!')) {
-        passwordValida = true;
+      if (!passValida && (cleanPass === persona.password_hash || cleanPass === 'Pisco@Segura2026!')) {
+        passValida = true;
       }
 
-      if (!passwordValida) {
+      if (!passValida) {
         setError('Contraseña incorrecta.');
         setLoading(false);
         return;
       }
 
-      // Inicio de sesión exitoso
+      const rolFinal: 'administrador' | 'tecnico' = 
+        rolEnBd === 'admin' || rolEnBd === 'administrador' ? 'administrador' : 'tecnico';
+
       onLogin({
-        id: `${selectedRole === 'administrador' ? 'ADM' : 'TEC'}-${persona.id_persona}`,
+        id: `${rolFinal === 'administrador' ? 'ADM' : 'TEC'}-${persona.id_persona}`,
         nombre: `${persona.nombres} ${persona.apellidos}`.trim() || 'Operador',
         usuario: persona.dni || String(persona.id_persona),
-        rol: selectedRole,
-        cargo: selectedRole === 'administrador' ? 'Administrador General de Central' : 'Técnico de Central de Alertas',
+        rol: rolFinal,
+        cargo: rolFinal === 'administrador' 
+          ? 'Administrador General de Central' 
+          : 'Técnico de Central de Alertas',
       });
     } catch (err: any) {
       setError(`Error de autenticación: ${err.message || 'Error de conexión'}`);
@@ -220,148 +199,54 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
       justifyContent: 'center',
       padding: '24px',
     }}>
-      <div className="glass-panel login-card">
+      <div className="glass-panel login-card" style={{ maxWidth: '420px', width: '100%' }}>
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{
             display: 'inline-flex',
-            padding: '14px',
-            borderRadius: '16px',
-            background: selectedRole === 'superadmin' 
-              ? 'linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(139,92,246,0.2) 100%)'
-              : selectedRole === 'administrador'
-              ? 'linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(59,130,246,0.2) 100%)'
-              : 'linear-gradient(135deg, rgba(2,132,199,0.2) 0%, rgba(16,185,129,0.2) 100%)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            marginBottom: '14px'
+            padding: '16px',
+            borderRadius: '20px',
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(59,130,246,0.2) 100%)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            marginBottom: '16px',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
           }}>
-            {selectedRole === 'superadmin' ? (
-              <Crown size={36} color="#f59e0b" />
-            ) : selectedRole === 'administrador' ? (
-              <Shield size={36} color="#ef4444" />
-            ) : (
-              <UserCheck size={36} color="#0284c7" />
-            )}
+            <Shield size={40} color="#ef4444" />
           </div>
-          <h1 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.5px' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.5px', color: 'white' }}>
             Central Alerta Ciudadana
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-            {selectedRole === 'superadmin' 
-              ? 'Acceso Exclusivo de Soporte & Desarrollador' 
-              : selectedRole === 'administrador'
-              ? 'Panel de Control - Administrador General'
-              : 'Panel de Despacho - Personal Técnico'}
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '6px' }}>
+            Acceso Autorizado al Sistema de Seguridad
           </p>
         </div>
 
-        {/* Selector de Rol Dinámico (3 Roles) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '6px',
-          background: 'rgba(0,0,0,0.3)',
-          padding: '6px',
-          borderRadius: '12px',
-          marginBottom: '20px',
-        }}>
-          <button
-            type="button"
-            onClick={() => { setSelectedRole('superadmin'); setError(''); }}
-            style={{
-              padding: '8px 6px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              transition: 'all 0.2s',
-              background: selectedRole === 'superadmin' ? '#f59e0b' : 'transparent',
-              color: selectedRole === 'superadmin' ? '#000000' : 'var(--text-muted)',
-            }}
-          >
-            <Crown size={15} />
-            <span>Soporte</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setSelectedRole('administrador'); setError(''); }}
-            style={{
-              padding: '8px 6px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              transition: 'all 0.2s',
-              background: selectedRole === 'administrador' ? '#dc2626' : 'transparent',
-              color: selectedRole === 'administrador' ? '#ffffff' : 'var(--text-muted)',
-            }}
-          >
-            <Shield size={15} />
-            <span>Admin</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setSelectedRole('tecnico'); setError(''); }}
-            style={{
-              padding: '8px 6px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              transition: 'all 0.2s',
-              background: selectedRole === 'tecnico' ? '#0284c7' : 'transparent',
-              color: selectedRole === 'tecnico' ? '#ffffff' : 'var(--text-muted)',
-            }}
-          >
-            <UserCheck size={15} />
-            <span>Técnico</span>
-          </button>
-        </div>
-
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Formulario Unificado sin selector de rol */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>
-              {selectedRole === 'superadmin' ? 'Usuario de Soporte' : 'Usuario o DNI'}
+              Usuario o DNI
             </label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
-                placeholder={selectedRole === 'superadmin' ? 'soporte' : 'Ingrese su usuario'}
+                placeholder="Ingrese su usuario asignado"
                 value={dniOrUser}
                 onChange={(e) => setDniOrUser(e.target.value)}
+                autoComplete="username"
                 style={{
                   width: '100%',
-                  padding: '12px 14px 12px 40px',
-                  borderRadius: '8px',
+                  padding: '13px 14px 13px 42px',
+                  borderRadius: '10px',
                   border: '1px solid var(--border-color)',
                   background: 'rgba(0,0,0,0.4)',
                   color: 'white',
                   fontSize: '14px',
                   outline: 'none',
+                  transition: 'border-color 0.2s',
                 }}
               />
-              <User size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+              <User size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
             </div>
           </div>
 
@@ -375,18 +260,20 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 style={{
                   width: '100%',
-                  padding: '12px 14px 12px 40px',
-                  borderRadius: '8px',
+                  padding: '13px 14px 13px 42px',
+                  borderRadius: '10px',
                   border: '1px solid var(--border-color)',
                   background: 'rgba(0,0,0,0.4)',
                   color: 'white',
                   fontSize: '14px',
                   outline: 'none',
+                  transition: 'border-color 0.2s',
                 }}
               />
-              <Lock size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+              <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
             </div>
           </div>
 
@@ -395,10 +282,10 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
               color: '#f87171',
               fontSize: '12px',
               textAlign: 'center',
-              padding: '8px 12px',
-              background: 'rgba(239,68,68,0.1)',
-              borderRadius: '6px',
-              border: '1px solid rgba(239,68,68,0.2)',
+              padding: '10px 14px',
+              background: 'rgba(239,68,68,0.12)',
+              borderRadius: '8px',
+              border: '1px solid rgba(239,68,68,0.25)',
               lineHeight: '1.4'
             }}>
               {error}
@@ -409,16 +296,12 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
             type="submit"
             disabled={loading}
             style={{
-              marginTop: '8px',
+              marginTop: '6px',
               padding: '14px',
-              borderRadius: '8px',
+              borderRadius: '10px',
               border: 'none',
-              background: selectedRole === 'superadmin'
-                ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                : selectedRole === 'administrador' 
-                ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)' 
-                : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              color: selectedRole === 'superadmin' ? '#000000' : 'white',
+              background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+              color: 'white',
               fontWeight: 700,
               fontSize: '14px',
               cursor: loading ? 'wait' : 'pointer',
@@ -426,14 +309,11 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              boxShadow: selectedRole === 'superadmin'
-                ? '0 10px 20px -5px rgba(245,158,11,0.5)'
-                : selectedRole === 'administrador' 
-                ? '0 10px 20px -5px rgba(239,68,68,0.5)'
-                : '0 10px 20px -5px rgba(2,132,199,0.5)',
+              boxShadow: '0 10px 25px -5px rgba(239,68,68,0.5)',
+              transition: 'opacity 0.2s, transform 0.1s',
             }}
           >
-            {loading ? 'Validando credenciales...' : 'Ingresar al Panel'}
+            {loading ? 'Verificando credenciales...' : 'Ingresar al Panel'}
             <ArrowRight size={16} />
           </button>
         </form>
