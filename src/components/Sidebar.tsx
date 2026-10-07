@@ -12,7 +12,9 @@ import {
   ShieldCheck,
   Crown,
   Server,
-  X
+  X,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import type { UserSession } from '../types';
 
@@ -23,6 +25,8 @@ interface SidebarProps {
   onLogout: () => void;
   activeAlertsCount: number;
   onCloseMobile?: () => void;
+  soundEnabled?: boolean;
+  onToggleSound?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -32,6 +36,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   activeAlertsCount,
   onCloseMobile,
+  soundEnabled = true,
+  onToggleSound,
 }) => {
   const isSuperAdmin = session.rol === 'superadmin';
   const isAdmin = session.rol === 'administrador';
@@ -376,8 +382,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </nav>
 
-      {/* Logout Footer */}
-      <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)' }}>
+      {/* Sound Toggle & Logout Footer */}
+      <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {onToggleSound && (
+          <button
+            onClick={onToggleSound}
+            title={soundEnabled ? 'Silenciar alarma sonora' : 'Activar alarma sonora'}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: `1px solid ${soundEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+              background: soundEnabled ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0,0,0,0.2)',
+              color: soundEnabled ? '#34d399' : 'var(--text-muted)',
+              fontWeight: 600,
+              fontSize: '12px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+              <span>Alarma Sonora ({soundEnabled ? 'Activa' : 'Silenciada'})</span>
+            </div>
+            <span style={{ fontSize: '10px', opacity: 0.8 }}>alerta.mp3</span>
+          </button>
+        )}
         <button
           onClick={onLogout}
           style={{

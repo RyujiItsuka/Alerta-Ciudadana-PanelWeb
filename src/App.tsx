@@ -15,19 +15,44 @@ import { LiveTrackingModal } from './components/LiveTrackingModal';
 import { SystemHealthDashboard } from './components/SystemHealthDashboard';
 
 export function App() {
-  // Persistencia de sesión en localStorage para no regresar al login al recargar
+  // Limpiar cualquier residuo de localStorage previo
+  try {
+    localStorage.removeItem('alerta_ciudadana_session');
+  } catch {}
+
+  // Persistencia de sesión exclusiva en sessionStorage (se destruye al cerrar la ventana)
   const [session, setSession] = useState<UserSession | null>(() => {
     try {
-      const saved = localStorage.getItem('alerta_ciudadana_session');
+      const saved = sessionStorage.getItem('alerta_ciudadana_session');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
     }
   });
 
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('alerta_sound_enabled') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  const playAlertSound = () => {
+    try {
+      const audio = new Audio('/alerta.mp3');
+      audio.volume = 1.0;
+      audio.play().catch((err) => {
+        console.warn('[AUDIO] Autoplay bloqueado por el navegador hasta la primera interacción:', err);
+      });
+    } catch (err) {
+      console.error('[AUDIO] Error instanciando audio:', err);
+    }
+  };
+
   const [currentTab, setCurrentTab] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem('alerta_ciudadana_session');
+      const saved = sessionStorage.getItem('alerta_ciudadana_session');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.rol === 'superadmin') return 'dashboard';
@@ -42,14 +67,14 @@ export function App() {
     setSession(newSession);
     try {
       if (newSession) {
-        localStorage.setItem('alerta_ciudadana_session', JSON.stringify(newSession));
+        sessionStorage.setItem('alerta_ciudadana_session', JSON.stringify(newSession));
         if (newSession.rol === 'superadmin') {
           setCurrentTab('dashboard');
         } else {
           setCurrentTab('alertas');
         }
       } else {
-        localStorage.removeItem('alerta_ciudadana_session');
+        sessionStorage.removeItem('alerta_ciudadana_session');
         setCurrentTab('alertas');
       }
     } catch {
@@ -213,6 +238,11 @@ export function App() {
         { event: '*', schema: 'public', table: 'reporte' },
         (payload) => {
           console.log('[SUPABASE REALTIME EVENT]', payload);
+          if (payload.eventType === 'INSERT') {
+            if (soundEnabled) {
+              playAlertSound();
+            }
+          }
           loadAlerts();
         }
       )
@@ -598,6 +628,13 @@ export function App() {
           onLogout={() => handleSetSession(null)}
           activeAlertsCount={activeAlertsCount}
           onCloseMobile={() => setMobileMenuOpen(false)}
+          soundEnabled={soundEnabled}
+          onToggleSound={() => {
+            const next = !soundEnabled;
+            setSoundEnabled(next);
+            try { sessionStorage.setItem('alerta_sound_enabled', String(next)); } catch {}
+            if (next) playAlertSound();
+          }}
         />
       </div>
 
