@@ -1,10 +1,10 @@
-export type UserRole = 'administrador' | 'tecnico' | 'ciudadano';
+export type UserRole = 'superadmin' | 'administrador' | 'tecnico' | 'ciudadano';
 
 export interface UserSession {
   id: string;
   nombre: string;
   email?: string;
-  rol: 'administrador' | 'tecnico';
+  rol: 'superadmin' | 'administrador' | 'tecnico';
   cargo: string;
   usuario: string;
 }

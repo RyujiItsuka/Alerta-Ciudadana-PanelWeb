@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, ShieldAlert, Radio } from 'lucide-react';
+import { Menu, ShieldAlert, Radio, Crown } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { UserSession, AlertaReporte, CiudadanoItem, TecnicoItem, SystemConfig } from './types';
 import { LoginView } from './components/LoginView';
@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar';
 import { AlertsPanel } from './components/AlertsPanel';
 import { AppAlertsFeed } from './components/AppAlertsFeed';
 import { TechniciansManagement } from './components/TechniciansManagement';
+import { AdministratorsManagement } from './components/AdministratorsManagement';
 import { CitizensManagement } from './components/CitizensManagement';
 import { TechnicianCalibration } from './components/TechnicianCalibration';
 import { TechnicianDiagnostics } from './components/TechnicianDiagnostics';
@@ -42,8 +43,9 @@ export function App() {
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null);
   const [citizens, setCitizens] = useState<CiudadanoItem[]>([]);
 
-  // Estado de Técnicos de Central (Conectado a tabla persona de Supabase)
+  // Estado de Técnicos y Administradores de Central
   const [technicians, setTechnicians] = useState<TecnicoItem[]>([]);
+  const [administrators, setAdministrators] = useState<any[]>([]);
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>({
     phoneCentral: '51976264949',
@@ -100,7 +102,7 @@ export function App() {
     }
   };
 
-  // 2. Cargar Técnicos de Central (Tabla dedicada operador_central con fallback)
+  // 2. Cargar Técnicos de Central (Tabla dedicada operador_central)
   const loadTechnicians = async () => {
     try {
       const { data: opData, error: opError } = await supabase
@@ -137,7 +139,24 @@ export function App() {
     }
   };
 
-  // 3. Cargar Ciudadanos (Tabla persona dedicada a vecinos de la App Móvil)
+  // 3. Cargar Administradores de Central (Tabla operador_central)
+  const loadAdministrators = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('operador_central')
+        .select('*')
+        .in('rol', ['admin', 'administrador'])
+        .order('id_operador', { ascending: false });
+
+      if (!error && data) {
+        setAdministrators(data);
+      }
+    } catch (err) {
+      console.warn('Error cargando administradores:', err);
+    }
+  };
+
+  // 4. Cargar Ciudadanos (Tabla persona de vecinos de la App Móvil)
   const loadCitizens = async () => {
     try {
       const { data, error } = await supabase
@@ -162,10 +181,11 @@ export function App() {
     }
   };
 
-  // 4. Suscripción en Tiempo Real (Supabase Realtime Channel)
+  // 5. Suscripción en Tiempo Real (Supabase Realtime Channel)
   useEffect(() => {
     loadAlerts();
     loadTechnicians();
+    loadAdministrators();
     loadCitizens();
 
     const channel = supabase
@@ -201,7 +221,7 @@ export function App() {
     }
   };
 
-  // Gestión de Técnicos (CRUD en tabla dedicada operador_central sin DNI)
+  // Gestión de Técnicos (CRUD en operador_central)
   const handleAddTechnician = async (newTech: { usuario: string; nombres: string; apellidos: string; telefono: string; password?: string }) => {
     const { data: opData, error: opError } = await supabase
       .from('operador_central')
@@ -259,6 +279,60 @@ export function App() {
     }
 
     setTechnicians((prev) => prev.filter((t) => t.usuario !== usuario));
+  };
+
+  // Gestión de Administradores (CRUD exclusivo para Superadmin)
+  const handleAddAdministrator = async (newAdmin: any) => {
+    const { data, error } = await supabase
+      .from('operador_central')
+      .insert({
+        usuario: newAdmin.usuario,
+        nombres: newAdmin.nombres,
+        apellidos: newAdmin.apellidos,
+        telefono: newAdmin.telefono,
+        password_hash: newAdmin.password_hash,
+        rol: 'administrador',
+        turno: 'Rotativo',
+        estado: 'activo',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (data) {
+      setAdministrators((prev) => [data, ...prev]);
+    }
+  };
+
+  const handleUpdateAdministrator = async (updated: any) => {
+    const payload: any = {
+      nombres: updated.nombres,
+      apellidos: updated.apellidos,
+      telefono: updated.telefono,
+    };
+    if (updated.password_hash) {
+      payload.password_hash = updated.password_hash;
+    }
+
+    const { error } = await supabase
+      .from('operador_central')
+      .update(payload)
+      .eq('usuario', updated.usuario);
+
+    if (error) throw error;
+    setAdministrators((prev) =>
+      prev.map((a) => (a.usuario === updated.usuario ? { ...a, ...updated } : a))
+    );
+  };
+
+  const handleDeleteAdministrator = async (usuario: string) => {
+    const { error } = await supabase
+      .from('operador_central')
+      .delete()
+      .eq('usuario', usuario);
+
+    if (error) throw error;
+    setAdministrators((prev) => prev.filter((a) => a.usuario !== usuario));
   };
 
   // Suspender / Reactivar Ciudadano
@@ -405,6 +479,10 @@ export function App() {
     return <LoginView onLogin={(sess) => handleSetSession(sess)} />;
   }
 
+  const isSuperAdmin = session.rol === 'superadmin';
+  const isAdmin = session.rol === 'administrador';
+  const canManagePersonnel = isSuperAdmin || isAdmin;
+
   const activeAlertsCount = alerts.filter((a) => a.id_estado === 1).length;
 
   return (
@@ -429,7 +507,11 @@ export function App() {
             <Menu size={20} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert size={20} color={session.rol === 'administrador' ? '#ef4444' : '#0284c7'} />
+            {isSuperAdmin ? (
+              <Crown size={20} color="#f59e0b" />
+            ) : (
+              <ShieldAlert size={20} color={isAdmin ? '#ef4444' : '#0284c7'} />
+            )}
             <span style={{ fontWeight: 800, fontSize: '15px', color: 'white', letterSpacing: '-0.3px' }}>
               Central Alerta
             </span>
@@ -441,12 +523,12 @@ export function App() {
             fontSize: '11px',
             padding: '3px 8px',
             borderRadius: '999px',
-            background: session.rol === 'administrador' ? 'rgba(239,68,68,0.2)' : 'rgba(2,132,199,0.2)',
-            color: session.rol === 'administrador' ? '#fca5a5' : '#7dd3fc',
+            background: isSuperAdmin ? 'rgba(245,158,11,0.2)' : isAdmin ? 'rgba(239,68,68,0.2)' : 'rgba(2,132,199,0.2)',
+            color: isSuperAdmin ? '#fde68a' : isAdmin ? '#fca5a5' : '#7dd3fc',
             fontWeight: 700,
             textTransform: 'uppercase',
           }}>
-            {session.rol === 'administrador' ? 'Admin' : 'Técnico'}
+            {isSuperAdmin ? 'Soporte Dev' : isAdmin ? 'Admin' : 'Técnico'}
           </span>
           {activeAlertsCount > 0 && (
             <span style={{
@@ -488,7 +570,7 @@ export function App() {
 
       {/* Área Principal de Trabajo */}
       <main className="main-content">
-        {/* 1. Despacho & Alertas (Idéntico para Administrador y Técnico) */}
+        {/* 1. Despacho & Alertas (Idéntico para todos los roles) */}
         {currentTab === 'alertas' && (
           <AlertsPanel
             alerts={alerts}
@@ -499,7 +581,7 @@ export function App() {
           />
         )}
 
-        {/* 2. Alertas App (Idéntico para Administrador y Técnico) */}
+        {/* 2. Historial de Alertas (Disponible para todos) */}
         {currentTab === 'alertas_app' && (
           <AppAlertsFeed
             alerts={alerts}
@@ -508,8 +590,8 @@ export function App() {
           />
         )}
 
-        {/* 3. Gestión de Técnicos (Exclusivo Administrador) */}
-        {currentTab === 'tecnicos' && session.rol === 'administrador' && (
+        {/* 3. Gestión de Técnicos (Superadmin y Administrador) */}
+        {currentTab === 'tecnicos' && canManagePersonnel && (
           <TechniciansManagement
             technicians={technicians}
             onAddTechnician={handleAddTechnician}
@@ -518,8 +600,8 @@ export function App() {
           />
         )}
 
-        {/* 4. Gestión de Ciudadanos (Exclusivo Administrador) */}
-        {currentTab === 'ciudadanos' && session.rol === 'administrador' && (
+        {/* 4. Gestión de Ciudadanos (Superadmin y Administrador) */}
+        {currentTab === 'ciudadanos' && canManagePersonnel && (
           <CitizensManagement
             citizens={citizens}
             onToggleSuspend={handleToggleSuspend}
@@ -527,16 +609,26 @@ export function App() {
           />
         )}
 
-        {/* 5. Configuración Global (Exclusivo Administrador) */}
-        {currentTab === 'calibracion' && session.rol === 'administrador' && (
+        {/* 5. Gestión de Administradores (Exclusivo Superadmin / Desarrollador) */}
+        {currentTab === 'administradores' && isSuperAdmin && (
+          <AdministratorsManagement
+            administrators={administrators}
+            onAddAdministrator={handleAddAdministrator}
+            onUpdateAdministrator={handleUpdateAdministrator}
+            onDeleteAdministrator={handleDeleteAdministrator}
+          />
+        )}
+
+        {/* 6. Configuración Global (Exclusivo Superadmin / Desarrollador) */}
+        {currentTab === 'calibracion' && isSuperAdmin && (
           <TechnicianCalibration
             config={systemConfig}
             onSaveConfig={(updated) => setSystemConfig(updated)}
           />
         )}
 
-        {/* 6. Auditoría & WhatsApp (Exclusivo Administrador) */}
-        {currentTab === 'diagnostico' && session.rol === 'administrador' && (
+        {/* 7. Auditoría & WhatsApp (Exclusivo Superadmin / Desarrollador) */}
+        {currentTab === 'diagnostico' && isSuperAdmin && (
           <TechnicianDiagnostics />
         )}
       </main>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import bcrypt from 'bcryptjs';
 import { 
   Users, 
   Search, 
@@ -74,6 +75,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
           nombres,
           apellidos,
           telefono,
+          password: password ? bcrypt.hashSync(password, 10) : undefined,
         });
       } else {
         await onAddTechnician({
@@ -81,7 +83,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
           nombres,
           apellidos,
           telefono,
-          password: password || 'Tecnico@2026',
+          password: password ? bcrypt.hashSync(password, 10) : bcrypt.hashSync('Tecnico@2026', 10),
         });
       }
       setShowModal(false);
