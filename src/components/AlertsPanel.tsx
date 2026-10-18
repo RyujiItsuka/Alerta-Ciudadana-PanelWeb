@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
 import { 
   MapPin, 
   Clock, 
@@ -10,7 +10,8 @@ import {
   Radio
 } from 'lucide-react';
 import type { AlertaReporte, UserSession } from '../types';
-import { LiveTrackingModal } from './LiveTrackingModal';
+
+const LiveTrackingModal = lazy(() => import('./LiveTrackingModal').then((m) => ({ default: m.LiveTrackingModal })));
 
 interface AlertsPanelProps {
   alerts: AlertaReporte[];
@@ -32,16 +33,20 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
   // EN DESPACHO & ALERTAS: SOLO se muestran alertas activas (Pendientes: 1 y En camino: 2)
   // Las alertas Atendidas (3) y Falsas Alarmas (4) pasan automáticamente a Historial de Alertas.
   // Ordenadas cronológicamente por hora de activación (más recientes primero).
-  const activeAlerts = alerts
-    .filter((a) => a.id_estado === 1 || a.id_estado === 2)
-    .sort((a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime());
+  const activeAlerts = useMemo(() => {
+    return alerts
+      .filter((a) => a.id_estado === 1 || a.id_estado === 2)
+      .sort((a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime());
+  }, [alerts]);
 
-  const filteredAlerts = activeAlerts.filter((a) => {
-    if (filterType === 'all') return true;
-    if (filterType === 'pending') return a.id_estado === 1;
-    if (filterType === 'onway') return a.id_estado === 2;
-    return true;
-  });
+  const filteredAlerts = useMemo(() => {
+    return activeAlerts.filter((a) => {
+      if (filterType === 'all') return true;
+      if (filterType === 'pending') return a.id_estado === 1;
+      if (filterType === 'onway') return a.id_estado === 2;
+      return true;
+    });
+  }, [activeAlerts, filterType]);
 
   const countPending = activeAlerts.filter(a => a.id_estado === 1).length;
   const countOnWay = activeAlerts.filter(a => a.id_estado === 2).length;
@@ -457,10 +462,12 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
       </div>
 
       {trackingAlert && (
-        <LiveTrackingModal
-          alert={trackingAlert}
-          onClose={() => setTrackingAlert(null)}
-        />
+        <Suspense fallback={null}>
+          <LiveTrackingModal
+            alert={trackingAlert}
+            onClose={() => setTrackingAlert(null)}
+          />
+        </Suspense>
       )}
     </div>
   );

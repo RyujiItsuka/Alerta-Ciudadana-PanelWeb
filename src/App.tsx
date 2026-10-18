@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Menu, ShieldAlert, Radio, Crown } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { UserSession, AlertaReporte, CiudadanoItem, TecnicoItem, SystemConfig } from './types';
 import { LoginView } from './components/LoginView';
 import { Sidebar } from './components/Sidebar';
 import { AlertsPanel } from './components/AlertsPanel';
-import { AppAlertsFeed } from './components/AppAlertsFeed';
-import { TechniciansManagement } from './components/TechniciansManagement';
-import { AdministratorsManagement } from './components/AdministratorsManagement';
-import { CitizensManagement } from './components/CitizensManagement';
-import { TechnicianCalibration } from './components/TechnicianCalibration';
-import { TechnicianDiagnostics } from './components/TechnicianDiagnostics';
-import { LiveTrackingModal } from './components/LiveTrackingModal';
-import { SystemHealthDashboard } from './components/SystemHealthDashboard';
+
+// Code-splitting con carga diferida (lazy loading) para reducir drásticamente el bundle inicial
+const AppAlertsFeed = lazy(() => import('./components/AppAlertsFeed').then((m) => ({ default: m.AppAlertsFeed })));
+const TechniciansManagement = lazy(() => import('./components/TechniciansManagement').then((m) => ({ default: m.TechniciansManagement })));
+const AdministratorsManagement = lazy(() => import('./components/AdministratorsManagement').then((m) => ({ default: m.AdministratorsManagement })));
+const CitizensManagement = lazy(() => import('./components/CitizensManagement').then((m) => ({ default: m.CitizensManagement })));
+const TechnicianCalibration = lazy(() => import('./components/TechnicianCalibration').then((m) => ({ default: m.TechnicianCalibration })));
+const TechnicianDiagnostics = lazy(() => import('./components/TechnicianDiagnostics').then((m) => ({ default: m.TechnicianDiagnostics })));
+const LiveTrackingModal = lazy(() => import('./components/LiveTrackingModal').then((m) => ({ default: m.LiveTrackingModal })));
+const SystemHealthDashboard = lazy(() => import('./components/SystemHealthDashboard').then((m) => ({ default: m.SystemHealthDashboard })));
 
 export function App() {
   // Limpiar cualquier residuo de localStorage previo
@@ -83,6 +85,13 @@ export function App() {
   };
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [alerts, setAlerts] = useState<AlertaReporte[]>([]);
+  const activeAlertsCount = useMemo(() => alerts.filter((a) => a.id_estado === 1).length, [alerts]);
+  const activeTab = useMemo(() => {
+    if (session?.rol === 'superadmin' && (currentTab === 'alertas' || currentTab === 'alertas_app')) {
+      return 'dashboard';
+    }
+    return currentTab;
+  }, [session?.rol, currentTab]);
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null);
   const [citizens, setCitizens] = useState<CiudadanoItem[]>([]);
 
@@ -226,10 +235,13 @@ export function App() {
 
   // 5. Suscripción en Tiempo Real (Supabase Realtime Channel)
   useEffect(() => {
-    loadAlerts();
-    loadTechnicians();
-    loadAdministrators();
-    loadCitizens();
+    // Carga inicial en paralelo sin bloquear
+    Promise.allSettled([
+      loadAlerts(),
+      loadTechnicians(),
+      loadAdministrators(),
+      loadCitizens(),
+    ]);
 
     const channel = supabase
       .channel('schema-db-changes')
@@ -237,7 +249,6 @@ export function App() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reporte' },
         (payload) => {
-          console.log('[SUPABASE REALTIME EVENT]', payload);
           if (payload.eventType === 'INSERT') {
             if (soundEnabled) {
               playAlertSound();
@@ -251,14 +262,7 @@ export function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  // Asegurar que superadmin no quede posicionado en vistas operativas de alertas
-  useEffect(() => {
-    if (session?.rol === 'superadmin' && (currentTab === 'alertas' || currentTab === 'alertas_app')) {
-      setCurrentTab('dashboard');
-    }
-  }, [session?.rol, currentTab]);
+  }, [soundEnabled]);
 
   // Cambio de estado de alerta (Despacho de patrulla, resolución, etc.)
   const handleUpdateStatus = async (alertId: number, newStatusId: number, _statusName: string) => {
@@ -459,7 +463,7 @@ export function App() {
           setStandaloneAlert(formatted);
           document.title = `🔴 GPS en Vivo - Incidente #${formatted.id_reporte} (${formatted.ciudadano?.nombres || ''})`;
         }
-      } catch (err) {
+      } catch {
         setStandaloneError('Error al sincronizar con el servidor.');
       } finally {
         setStandaloneLoading(false);
@@ -530,11 +534,28 @@ export function App() {
     }
 
     return (
-      <LiveTrackingModal
-        alert={standaloneAlert}
-        isStandalone={true}
-        onClose={() => window.close()}
-      />
+      <Suspense fallback={
+        <div style={{
+          height: '100vh',
+          width: '100vw',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0B0E14',
+          color: 'white',
+          gap: '16px',
+        }}>
+          <Radio size={48} color="#ef4444" style={{ animation: 'pulse 1.5s infinite' }} />
+          <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Conectando con señal GPS en vivo...</h2>
+        </div>
+      }>
+        <LiveTrackingModal
+          alert={standaloneAlert}
+          isStandalone={true}
+          onClose={() => window.close()}
+        />
+      </Suspense>
     );
   }
 
@@ -545,8 +566,6 @@ export function App() {
   const isSuperAdmin = session.rol === 'superadmin';
   const isAdmin = session.rol === 'administrador';
   const canManagePersonnel = isSuperAdmin || isAdmin;
-
-  const activeAlertsCount = alerts.filter((a) => a.id_estado === 1).length;
 
   return (
     <div className="app-layout">
@@ -620,7 +639,7 @@ export function App() {
       <div className={`sidebar-container ${mobileMenuOpen ? 'open' : ''}`}>
         <Sidebar
           session={session}
-          currentTab={currentTab}
+          currentTab={activeTab}
           onTabChange={(tab) => {
             setCurrentTab(tab);
             setMobileMenuOpen(false);
@@ -640,77 +659,91 @@ export function App() {
 
       {/* Área Principal de Trabajo */}
       <main className="main-content">
-        {/* 0. Estado del Sistema & Servidores Cloud (Exclusivo Superadmin - Pantalla de Inicio) */}
-        {currentTab === 'dashboard' && isSuperAdmin && (
-          <SystemHealthDashboard
-            totalAdmins={administrators.length}
-            totalTechnicians={technicians.length}
-            totalCitizens={citizens.length}
-          />
-        )}
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '48px',
+            color: '#94a3b8',
+            fontSize: '13px',
+            fontWeight: 600,
+          }}>
+            Cargando módulo...
+          </div>
+        }>
+          {/* 0. Estado del Sistema & Servidores Cloud (Exclusivo Superadmin - Pantalla de Inicio) */}
+          {activeTab === 'dashboard' && isSuperAdmin && (
+            <SystemHealthDashboard
+              totalAdmins={administrators.length}
+              totalTechnicians={technicians.length}
+              totalCitizens={citizens.length}
+            />
+          )}
 
-        {/* 1. Despacho & Alertas (Exclusivo Administrador y Técnico - Oculto para Superadmin) */}
-        {currentTab === 'alertas' && !isSuperAdmin && (
-          <AlertsPanel
-            alerts={alerts}
-            session={session}
-            onUpdateStatus={handleUpdateStatus}
-            onSelectAlert={(a) => setSelectedAlertId(a.id_reporte)}
-            selectedAlertId={selectedAlertId}
-          />
-        )}
+          {/* 1. Despacho & Alertas (Exclusivo Administrador y Técnico - Oculto para Superadmin) */}
+          {activeTab === 'alertas' && !isSuperAdmin && (
+            <AlertsPanel
+              alerts={alerts}
+              session={session}
+              onUpdateStatus={handleUpdateStatus}
+              onSelectAlert={(a) => setSelectedAlertId(a.id_reporte)}
+              selectedAlertId={selectedAlertId}
+            />
+          )}
 
-        {/* 2. Historial de Alertas (Exclusivo Administrador y Técnico - Oculto para Superadmin) */}
-        {currentTab === 'alertas_app' && !isSuperAdmin && (
-          <AppAlertsFeed
-            alerts={alerts}
-            onSelectAlert={(a) => setSelectedAlertId(a.id_reporte)}
-            selectedAlertId={selectedAlertId}
-            onUpdateStatus={handleUpdateStatus}
-          />
-        )}
+          {/* 2. Historial de Alertas (Exclusivo Administrador y Técnico - Oculto para Superadmin) */}
+          {activeTab === 'alertas_app' && !isSuperAdmin && (
+            <AppAlertsFeed
+              alerts={alerts}
+              onSelectAlert={(a) => setSelectedAlertId(a.id_reporte)}
+              selectedAlertId={selectedAlertId}
+              onUpdateStatus={handleUpdateStatus}
+            />
+          )}
 
-        {/* 3. Gestión de Técnicos (Superadmin y Administrador) */}
-        {currentTab === 'tecnicos' && canManagePersonnel && (
-          <TechniciansManagement
-            technicians={technicians}
-            onAddTechnician={handleAddTechnician}
-            onUpdateTechnician={handleUpdateTechnician}
-            onDeleteTechnician={handleDeleteTechnician}
-          />
-        )}
+          {/* 3. Gestión de Técnicos (Superadmin y Administrador) */}
+          {activeTab === 'tecnicos' && canManagePersonnel && (
+            <TechniciansManagement
+              technicians={technicians}
+              onAddTechnician={handleAddTechnician}
+              onUpdateTechnician={handleUpdateTechnician}
+              onDeleteTechnician={handleDeleteTechnician}
+            />
+          )}
 
-        {/* 4. Gestión de Ciudadanos (Superadmin y Administrador) */}
-        {currentTab === 'ciudadanos' && canManagePersonnel && (
-          <CitizensManagement
-            citizens={citizens}
-            onToggleSuspend={handleToggleSuspend}
-            onResetPin={handleResetPin}
-          />
-        )}
+          {/* 4. Gestión de Ciudadanos (Superadmin y Administrador) */}
+          {activeTab === 'ciudadanos' && canManagePersonnel && (
+            <CitizensManagement
+              citizens={citizens}
+              onToggleSuspend={handleToggleSuspend}
+              onResetPin={handleResetPin}
+            />
+          )}
 
-        {/* 5. Gestión de Administradores (Exclusivo Superadmin / Desarrollador) */}
-        {currentTab === 'administradores' && isSuperAdmin && (
-          <AdministratorsManagement
-            administrators={administrators}
-            onAddAdministrator={handleAddAdministrator}
-            onUpdateAdministrator={handleUpdateAdministrator}
-            onDeleteAdministrator={handleDeleteAdministrator}
-          />
-        )}
+          {/* 5. Gestión de Administradores (Exclusivo Superadmin / Desarrollador) */}
+          {activeTab === 'administradores' && isSuperAdmin && (
+            <AdministratorsManagement
+              administrators={administrators}
+              onAddAdministrator={handleAddAdministrator}
+              onUpdateAdministrator={handleUpdateAdministrator}
+              onDeleteAdministrator={handleDeleteAdministrator}
+            />
+          )}
 
-        {/* 6. Configuración Global (Exclusivo Superadmin / Desarrollador) */}
-        {currentTab === 'calibracion' && isSuperAdmin && (
-          <TechnicianCalibration
-            config={systemConfig}
-            onSaveConfig={(updated) => setSystemConfig(updated)}
-          />
-        )}
+          {/* 6. Configuración Global (Exclusivo Superadmin / Desarrollador) */}
+          {activeTab === 'calibracion' && isSuperAdmin && (
+            <TechnicianCalibration
+              config={systemConfig}
+              onSaveConfig={(updated) => setSystemConfig(updated)}
+            />
+          )}
 
-        {/* 7. Auditoría & WhatsApp (Exclusivo Superadmin / Desarrollador) */}
-        {currentTab === 'diagnostico' && isSuperAdmin && (
-          <TechnicianDiagnostics />
-        )}
+          {/* 7. Auditoría & WhatsApp (Exclusivo Superadmin / Desarrollador) */}
+          {activeTab === 'diagnostico' && isSuperAdmin && (
+            <TechnicianDiagnostics />
+          )}
+        </Suspense>
       </main>
     </div>
   );

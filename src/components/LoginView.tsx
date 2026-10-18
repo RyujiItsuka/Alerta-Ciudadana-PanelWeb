@@ -41,7 +41,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         if (soporteData.password_hash?.startsWith('$2a$') || soporteData.password_hash?.startsWith('$2b$')) {
           try {
             passValida = bcrypt.compareSync(cleanPass, soporteData.password_hash);
-          } catch (_) {}
+          } catch {}
         }
         if (!passValida && cleanPass === soporteData.password_hash) {
           passValida = true;
@@ -91,7 +91,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
         if (operador.password_hash?.startsWith('$2a$') || operador.password_hash?.startsWith('$2b$')) {
           try {
             passValida = bcrypt.compareSync(cleanPass, operador.password_hash);
-          } catch (_) {}
+          } catch {}
         }
         if (!passValida && (cleanPass === operador.password_hash || cleanPass === 'Pisco@Segura2026!')) {
           passValida = true;
@@ -160,7 +160,7 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
       if (persona.password_hash?.startsWith('$2a$') || persona.password_hash?.startsWith('$2b$')) {
         try {
           passValida = bcrypt.compareSync(cleanPass, persona.password_hash);
-        } catch (_) {}
+        } catch {}
       }
       if (!passValida && (cleanPass === persona.password_hash || cleanPass === 'Pisco@Segura2026!')) {
         passValida = true;

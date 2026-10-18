@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Server, 
   Database, 
@@ -33,62 +33,69 @@ interface ServiceStatus {
   endpoint: string;
 }
 
+const INITIAL_SERVICES: ServiceStatus[] = [
+  {
+    name: 'Base de Datos PostgreSQL',
+    provider: 'Supabase Cloud (AWS us-east-1)',
+    status: 'operational',
+    latency: 42,
+    details: 'Motor relacional PostgreSQL 15 con extensiones pgcrypto y RLS activo',
+    endpoint: 'db.supabase.co:5432 (SSL)',
+  },
+  {
+    name: 'Supabase Realtime WebSockets',
+    provider: 'Supabase Engine',
+    status: 'operational',
+    latency: 35,
+    details: 'Canal duplex bidireccional wss:// para despacho instantáneo de alertas en vivo',
+    endpoint: 'wss://realtime.supabase.co/socket',
+  },
+  {
+    name: 'Red de Distribución CDN & Edge',
+    provider: 'Cloudflare Pages (Global Anycast)',
+    status: 'operational',
+    latency: 18,
+    details: 'Edge CDN con protección anti-DDoS, compresión Brotli y SSL automático',
+    endpoint: 'alertaciudadana.pages.dev',
+  },
+  {
+    name: 'Gateway WhatsApp & Webhooks',
+    provider: 'Green-API Enterprise',
+    status: 'operational',
+    latency: 85,
+    details: 'Instancia API activa para despacho de alertas a serenos y entrega de códigos PIN',
+    endpoint: 'api.green-api.com/waInstance...',
+  },
+  {
+    name: 'Autenticación Criptográfica',
+    provider: 'Módulo Local bcrypt (10 rounds)',
+    status: 'operational',
+    latency: 5,
+    details: 'Tablas cuenta_soporte y operador_central con sal criptográfica segura',
+    endpoint: 'RPC / pg_catalog / bcryptjs',
+  },
+];
+
 export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
   totalAdmins = 0,
   totalTechnicians = 0,
   totalCitizens = 0,
 }) => {
   const [checking, setChecking] = useState(false);
-  const [lastCheckTime, setLastCheckTime] = useState<Date>(new Date());
+  const [lastCheckTime, setLastCheckTime] = useState<Date>(() => new Date());
   const [cloudflareColo, setCloudflareColo] = useState<string>('LIM (Lima, Perú)');
   const [cloudflareHttp, setCloudflareHttp] = useState<string>('HTTP/3 (QUIC) + TLS 1.3');
 
-  const [services, setServices] = useState<ServiceStatus[]>([
-    {
-      name: 'Base de Datos PostgreSQL',
-      provider: 'Supabase Cloud (AWS us-east-1)',
-      status: 'operational',
-      latency: 42,
-      details: 'Motor relacional PostgreSQL 15 con extensiones pgcrypto y RLS activo',
-      endpoint: 'db.supabase.co:5432 (SSL)',
-    },
-    {
-      name: 'Supabase Realtime WebSockets',
-      provider: 'Supabase Engine',
-      status: 'operational',
-      latency: 35,
-      details: 'Canal duplex bidireccional wss:// para despacho instantáneo de alertas en vivo',
-      endpoint: 'wss://realtime.supabase.co/socket',
-    },
-    {
-      name: 'Red de Distribución CDN & Edge',
-      provider: 'Cloudflare Pages (Global Anycast)',
-      status: 'operational',
-      latency: 18,
-      details: 'Edge CDN con protección anti-DDoS, compresión Brotli y SSL automático',
-      endpoint: 'alertaciudadana.pages.dev',
-    },
-    {
-      name: 'Gateway WhatsApp & Webhooks',
-      provider: 'Green-API Enterprise',
-      status: 'operational',
-      latency: 85,
-      details: 'Instancia API activa para despacho de alertas a serenos y entrega de códigos PIN',
-      endpoint: 'api.green-api.com/waInstance...',
-    },
-    {
-      name: 'Autenticación Criptográfica',
-      provider: 'Módulo Local bcrypt (10 rounds)',
-      status: 'operational',
-      latency: 5,
-      details: 'Tablas cuenta_soporte y operador_central con sal criptográfica segura',
-      endpoint: 'RPC / pg_catalog / bcryptjs',
-    },
-  ]);
+  const [services, setServices] = useState<ServiceStatus[]>(INITIAL_SERVICES);
 
-  const runDiagnostics = async () => {
+  const runDiagnostics = useCallback(async () => {
     setChecking(true);
-    const updatedServices = [...services];
+    let currentList: ServiceStatus[] = [];
+    setServices((prev) => {
+      currentList = [...prev];
+      return prev;
+    });
+    const updatedServices = currentList.length > 0 ? [...currentList] : [...INITIAL_SERVICES];
 
     // 1. Diagnóstico Supabase DB
     const startDb = performance.now();
@@ -190,13 +197,13 @@ export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
     setServices(updatedServices);
     setLastCheckTime(new Date());
     setChecking(false);
-  };
+  }, []);
 
   useEffect(() => {
     runDiagnostics();
     const interval = setInterval(runDiagnostics, 45000); // Chequeo periódico cada 45 seg
     return () => clearInterval(interval);
-  }, []);
+  }, [runDiagnostics]);
 
   const allOperational = services.every((s) => s.status === 'operational');
 

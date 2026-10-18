@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { X, ExternalLink, Radio, Navigation, Clock, ShieldAlert, AlertTriangle, XCircle } from 'lucide-react';
@@ -44,6 +44,42 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
 
   const currentLat = points.length > 0 ? points[points.length - 1].latitud : initialLat;
   const currentLon = points.length > 0 ? points[points.length - 1].longitud : initialLon;
+
+  // Actualizar marcadores y polilínea en el mapa (declarado antes de los efectos)
+  const updateMapRoute = useCallback((currentPoints: UbicacionPoint[], cancelled: boolean = false) => {
+    if (!mapInstanceRef.current || currentPoints.length === 0) return;
+
+    const latLngs: [number, number][] = currentPoints.map((p) => [p.latitud, p.longitud]);
+    const latest = latLngs[latLngs.length - 1];
+
+    if (polylineRef.current) {
+      polylineRef.current.setLatLngs(latLngs);
+      polylineRef.current.setStyle({
+        color: cancelled ? '#f59e0b' : '#ef4444',
+      });
+    }
+
+    if (markerRef.current) {
+      markerRef.current.setLatLng(latest);
+      if (cancelled) {
+        markerRef.current.setPopupContent(
+          `<b>⏹️ Última Posición Recibida (Rastreo Finalizado)</b><br>` +
+          `Lat: ${latest[0].toFixed(5)}, Lon: ${latest[1].toFixed(5)}<br>` +
+          `<small style="color:#ef4444;font-weight:700;">⚠️ Transmisión cancelada por el usuario</small><br>` +
+          `<small style="color:#94a3b8">Hora guardada: ${new Date().toLocaleTimeString('es-PE')}</small>`
+        ).openPopup();
+      } else {
+        markerRef.current.setPopupContent(
+          `<b>🚨 Posición Actual (Punto #${currentPoints.length})</b><br>` +
+          `Lat: ${latest[0].toFixed(5)}, Lon: ${latest[1].toFixed(5)}<br>` +
+          `<small style="color:#94a3b8">Hora: ${new Date().toLocaleTimeString('es-PE')}</small>`
+        );
+      }
+    }
+
+    // Centrar mapa suavemente en la nueva posición
+    mapInstanceRef.current.panTo(latest, { animate: true, duration: 1.0 });
+  }, []);
 
   // 1. Inicializar el Mapa con Leaflet
   useEffect(() => {
@@ -107,7 +143,7 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [initialLat, initialLon, alert.id_reporte]);
 
   // 2. Cargar historial inicial de puntos y suscribirse a Supabase Realtime
   useEffect(() => {
@@ -225,43 +261,7 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
       supabase.removeChannel(channel);
       clearInterval(pollTimer);
     };
-  }, [alert.id_reporte]);
-
-  // Actualizar marcadores y polilínea en el mapa
-  const updateMapRoute = (currentPoints: UbicacionPoint[], cancelled: boolean = false) => {
-    if (!mapInstanceRef.current || currentPoints.length === 0) return;
-
-    const latLngs: [number, number][] = currentPoints.map((p) => [p.latitud, p.longitud]);
-    const latest = latLngs[latLngs.length - 1];
-
-    if (polylineRef.current) {
-      polylineRef.current.setLatLngs(latLngs);
-      polylineRef.current.setStyle({
-        color: cancelled ? '#f59e0b' : '#ef4444',
-      });
-    }
-
-    if (markerRef.current) {
-      markerRef.current.setLatLng(latest);
-      if (cancelled) {
-        markerRef.current.setPopupContent(
-          `<b>⏹️ Última Posición Recibida (Rastreo Finalizado)</b><br>` +
-          `Lat: ${latest[0].toFixed(5)}, Lon: ${latest[1].toFixed(5)}<br>` +
-          `<small style="color:#ef4444;font-weight:700;">⚠️ Transmisión cancelada por el usuario</small><br>` +
-          `<small style="color:#94a3b8">Hora guardada: ${new Date().toLocaleTimeString('es-PE')}</small>`
-        ).openPopup();
-      } else {
-        markerRef.current.setPopupContent(
-          `<b>🚨 Posición Actual (Punto #${currentPoints.length})</b><br>` +
-          `Lat: ${latest[0].toFixed(5)}, Lon: ${latest[1].toFixed(5)}<br>` +
-          `<small style="color:#94a3b8">Hora: ${new Date().toLocaleTimeString('es-PE')}</small>`
-        );
-      }
-    }
-
-    // Centrar mapa suavemente en la nueva posición
-    mapInstanceRef.current.panTo(latest, { animate: true, duration: 1.0 });
-  };
+  }, [alert.id_reporte, updateMapRoute]);
 
   const gmapsPinUrl = `https://www.google.com/maps?q=${currentLat},${currentLon}`;
 
