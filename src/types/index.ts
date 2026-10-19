@@ -7,6 +7,9 @@ export interface UserSession {
   rol: 'superadmin' | 'administrador' | 'tecnico';
   cargo: string;
   usuario: string;
+  /** JWT de staff firmado por la Edge Function `security`. Autoriza las
+   *  operaciones administrativas (alta/edición/baja de personal). */
+  token?: string;
 }
 
 export interface AlertaReporte {

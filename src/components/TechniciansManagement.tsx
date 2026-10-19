@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import bcrypt from 'bcryptjs';
 import { 
   Users, 
   Search, 
@@ -45,7 +44,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
     setNombres('');
     setApellidos('');
     setTelefono('');
-    setPassword('Tecnico@2026');
+    setPassword('');
     setShowModal(true);
   };
 
@@ -66,6 +65,11 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
       return;
     }
 
+    if (!editingTech && !password) {
+      alert('Debe asignar una contraseña al nuevo técnico. No se permiten claves por defecto.');
+      return;
+    }
+
     setSaving(true);
     try {
       if (editingTech) {
@@ -75,7 +79,8 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
           nombres,
           apellidos,
           telefono,
-          password: password ? bcrypt.hashSync(password, 10) : undefined,
+          // La contraseña viaja al servidor y se hashea con bcrypt (service_role).
+          password: password ? password : undefined,
         });
       } else {
         await onAddTechnician({
@@ -83,7 +88,7 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
           nombres,
           apellidos,
           telefono,
-          password: password ? bcrypt.hashSync(password, 10) : bcrypt.hashSync('Tecnico@2026', 10),
+          password: password,
         });
       }
       setShowModal(false);
@@ -237,7 +242,9 @@ export const TechniciansManagement: React.FC<TechniciansManagementProps> = ({
                       <button
                         onClick={() => {
                           if (confirm(`¿Estás seguro de eliminar al técnico ${t.nombres} ${t.apellidos} (Usuario: ${t.usuario})?`)) {
-                            onDeleteTechnician(t.usuario);
+                            onDeleteTechnician(t.usuario).catch((err: unknown) =>
+                              alert(`Error al eliminar técnico: ${(err as Error)?.message || err}`)
+                            );
                           }
                         }}
                         title="Eliminar técnico"

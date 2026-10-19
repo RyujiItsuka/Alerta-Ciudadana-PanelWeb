@@ -13,12 +13,25 @@ export const TechnicianDiagnostics: React.FC = () => {
   const [testingWa, setTestingWa] = useState(false);
   const [waResult, setWaResult] = useState<{ success: boolean; message: string; data?: any } | null>(null);
 
+  // Seguridad: el token de Green-API es un secreto y NO puede incluirse en el
+  // bundle web. El sondeo solo se habilita si existe un endpoint de diagnóstico
+  // seguro configurado por entorno (p. ej. una Edge Function que valide el estado).
+  const diagnosticsUrl = import.meta.env.VITE_GREEN_API_DIAGNOSTICS_URL as string | undefined;
+
   const handleTestWhatsApp = async () => {
+    if (!diagnosticsUrl) {
+      setWaResult({
+        success: false,
+        message: 'El diagnóstico de Green-API se ejecuta en el servidor (el token nunca se expone al navegador). Configure VITE_GREEN_API_DIAGNOSTICS_URL para habilitar este sondeo.',
+      });
+      return;
+    }
+
     setTestingWa(true);
     setWaResult(null);
 
     try {
-      const res = await fetch('https://7105.api.greenapi.com/waInstance710522731795/getStateInstance/1d98a458d1a64672abcff255236d807432183678856b42cfba');
+      const res = await fetch(diagnosticsUrl, { cache: 'no-store' });
       const data = await res.json();
 
       if (data && data.stateInstance) {
@@ -69,7 +82,7 @@ export const TechnicianDiagnostics: React.FC = () => {
             </div>
             <div>
               <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>Green-API WhatsApp Gateway</h3>
-              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Instancia: 710522731795</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Instancia gestionada en el servidor</span>
             </div>
           </div>
 
@@ -181,7 +194,7 @@ export const TechnicianDiagnostics: React.FC = () => {
           border: '1px solid rgba(255,255,255,0.06)',
         }}>
           <div>[INFO] Supabase Realtime channel 'reporte' conectado exitosamente.</div>
-          <div>[INFO] Green-API instance id: 710522731795 lista para despacho de WhatsApp.</div>
+          <div>[INFO] Green-API gestionada de forma segura en el servidor (token no expuesto).</div>
           <div>[INFO] Escuchando eventos de inserción en tabla 'reporte' y 'ubicacion'...</div>
           <div style={{ color: '#94a3b8' }}>[DEBUG] Latencia promedio Edge Functions: 142ms</div>
         </div>

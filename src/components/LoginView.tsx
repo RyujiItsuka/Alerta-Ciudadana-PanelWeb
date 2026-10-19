@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Shield, Lock, ArrowRight, User } from 'lucide-react';
-import bcrypt from 'bcryptjs';
 import { supabase } from '../lib/supabase';
 import type { UserSession } from '../types';
 
@@ -29,163 +28,42 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      // 1. INTENTO DE AUTENTICACIÓN: SUPERADMIN (CUENTA DE SOPORTE / DEV)
-      const { data: soporteData, error: sopError } = await supabase
-        .from('cuenta_soporte')
-        .select('*')
-        .eq('usuario', cleanInput)
-        .maybeSingle();
-
-      if (!sopError && soporteData && soporteData.activo !== false) {
-        let passValida = false;
-        if (soporteData.password_hash?.startsWith('$2a$') || soporteData.password_hash?.startsWith('$2b$')) {
-          try {
-            passValida = bcrypt.compareSync(cleanPass, soporteData.password_hash);
-          } catch {}
-        }
-        if (!passValida && cleanPass === soporteData.password_hash) {
-          passValida = true;
-        }
-
-        if (passValida) {
-          onLogin({
-            id: `SOP-${soporteData.id_soporte}`,
-            nombre: soporteData.nombre_completo || 'Soporte Alerta Ciudadana',
-            usuario: soporteData.usuario,
-            rol: 'superadmin',
-            cargo: 'Soporte Técnico & Desarrollador',
-          });
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Bypass de contingencia para cuenta superadmin
-      if (cleanInput.toLowerCase() === 'soporte' && cleanPass === 'Soporte@2026Dev!') {
-        onLogin({
-          id: 'SOP-001',
-          nombre: 'Soporte de Alerta Ciudadana',
-          usuario: 'soporte',
-          rol: 'superadmin',
-          cargo: 'Soporte Técnico & Desarrollador',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // 2. INTENTO DE AUTENTICACIÓN: OPERADOR CENTRAL (ADMINISTRADOR O TÉCNICO)
-      const { data: operador, error: opError } = await supabase
-        .from('operador_central')
-        .select('*')
-        .eq('usuario', cleanInput)
-        .maybeSingle();
-
-      if (!opError && operador) {
-        if (operador.estado === 'suspendido' || operador.estado === 'inactivo') {
-          setError('Tu cuenta se encuentra suspendida o inactiva.');
-          setLoading(false);
-          return;
-        }
-
-        let passValida = false;
-        if (operador.password_hash?.startsWith('$2a$') || operador.password_hash?.startsWith('$2b$')) {
-          try {
-            passValida = bcrypt.compareSync(cleanPass, operador.password_hash);
-          } catch {}
-        }
-        if (!passValida && (cleanPass === operador.password_hash || cleanPass === 'Pisco@Segura2026!')) {
-          passValida = true;
-        }
-
-        if (passValida) {
-          const rawRol = (operador.rol || '').toLowerCase().trim();
-          const rolFinal: 'administrador' | 'tecnico' = 
-            rawRol === 'admin' || rawRol === 'administrador' ? 'administrador' : 'tecnico';
-
-          onLogin({
-            id: `OP-${operador.id_operador}`,
-            nombre: `${operador.nombres} ${operador.apellidos}`.trim() || operador.usuario,
-            usuario: operador.usuario,
-            rol: rolFinal,
-            cargo: rolFinal === 'administrador' 
-              ? 'Administrador General de Central' 
-              : 'Técnico de Central de Alertas',
-          });
-          setLoading(false);
-          return;
-        } else {
-          setError('Contraseña incorrecta.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Bypass de Administrador maestro de emergencia
-      if (cleanInput.toLowerCase() === 'admin' && cleanPass === 'Pisco@Segura2026!') {
-        onLogin({
-          id: 'ADM-001',
-          nombre: 'Administrador General',
-          usuario: 'admin',
-          rol: 'administrador',
-          cargo: 'Administrador General de Central',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // 3. FALLBACK: TABLA PERSONA (TRANSICIÓN Y COMPATIBILIDAD)
-      const { data: persona, error: dbError } = await supabase
-        .from('persona')
-        .select('id_persona, dni, nombres, apellidos, telefono, rol, password_hash')
-        .or(`dni.eq.${cleanInput},telefono.eq.${cleanInput}`)
-        .maybeSingle();
-
-      if (dbError || !persona) {
-        setError('Usuario o contraseña incorrectos.');
-        setLoading(false);
-        return;
-      }
-
-      const rolEnBd = (persona.rol || '').toLowerCase().trim();
-
-      // REGLA ESTRICTA: Los vecinos/ciudadanos de la app móvil no pueden ingresar al panel web
-      if (rolEnBd === 'ciudadano') {
-        setError('Acceso denegado: Tu cuenta es de Ciudadano y solo está autorizada para la App Móvil.');
-        setLoading(false);
-        return;
-      }
-
-      // Validación de contraseña para administradores o técnicos migrados
-      let passValida = false;
-      if (persona.password_hash?.startsWith('$2a$') || persona.password_hash?.startsWith('$2b$')) {
-        try {
-          passValida = bcrypt.compareSync(cleanPass, persona.password_hash);
-        } catch {}
-      }
-      if (!passValida && (cleanPass === persona.password_hash || cleanPass === 'Pisco@Segura2026!')) {
-        passValida = true;
-      }
-
-      if (!passValida) {
-        setError('Contraseña incorrecta.');
-        setLoading(false);
-        return;
-      }
-
-      const rolFinal: 'administrador' | 'tecnico' = 
-        rolEnBd === 'admin' || rolEnBd === 'administrador' ? 'administrador' : 'tecnico';
-
-      onLogin({
-        id: `${rolFinal === 'administrador' ? 'ADM' : 'TEC'}-${persona.id_persona}`,
-        nombre: `${persona.nombres} ${persona.apellidos}`.trim() || 'Operador',
-        usuario: persona.dni || String(persona.id_persona),
-        rol: rolFinal,
-        cargo: rolFinal === 'administrador' 
-          ? 'Administrador General de Central' 
-          : 'Técnico de Central de Alertas',
+      // Autenticación 100% en el servidor (Edge Function `security`).
+      // El navegador NUNCA compara contraseñas ni lee hashes: bcrypt se ejecuta
+      // con service_role en Supabase y solo se devuelve la sesión ya validada.
+      const { data, error: fnError } = await supabase.functions.invoke('security', {
+        body: {
+          action: 'login-staff',
+          usuario: cleanInput,
+          password: cleanPass,
+        },
       });
-    } catch (err: any) {
-      setError(`Error de autenticación: ${err.message || 'Error de conexión'}`);
+
+      if (fnError) {
+        // Extraer el mensaje real del cuerpo de la respuesta (401/403 -> error).
+        let message = 'Usuario o contraseña incorrectos.';
+        try {
+          const ctx = (fnError as { context?: Response }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const payload = await ctx.json();
+            if (payload?.error) message = payload.error;
+          }
+        } catch {
+          // Sin cuerpo parseable: se mantiene el mensaje genérico.
+        }
+        setError(message);
+        return;
+      }
+
+      if (!data?.success || !data?.session) {
+        setError(data?.error || 'Usuario o contraseña incorrectos.');
+        return;
+      }
+
+      onLogin({ ...(data.session as UserSession), token: data.token });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error de conexión';
+      setError(`Error de autenticación: ${message}`);
     } finally {
       setLoading(false);
     }

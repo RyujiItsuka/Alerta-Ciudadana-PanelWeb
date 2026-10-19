@@ -1,4 +1,4 @@
-import React, { useState, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   MapPin, 
   Clock, 
@@ -9,13 +9,10 @@ import {
   Navigation,
   Radio
 } from 'lucide-react';
-import type { AlertaReporte, UserSession } from '../types';
-
-const LiveTrackingModal = lazy(() => import('./LiveTrackingModal').then((m) => ({ default: m.LiveTrackingModal })));
+import type { AlertaReporte } from '../types';
 
 interface AlertsPanelProps {
   alerts: AlertaReporte[];
-  session: UserSession;
   onUpdateStatus: (alertId: number, newStatusId: number, statusName: string) => void;
   onSelectAlert: (alert: AlertaReporte) => void;
   selectedAlertId: number | null;
@@ -28,7 +25,6 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
   selectedAlertId,
 }) => {
   const [filterType, setFilterType] = useState<string>('all');
-  const [trackingAlert, setTrackingAlert] = useState<AlertaReporte | null>(null);
 
   // EN DESPACHO & ALERTAS: SOLO se muestran alertas activas (Pendientes: 1 y En camino: 2)
   // Las alertas Atendidas (3) y Falsas Alarmas (4) pasan automáticamente a Historial de Alertas.
@@ -460,15 +456,6 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
             })()}
         </div>
       </div>
-
-      {trackingAlert && (
-        <Suspense fallback={null}>
-          <LiveTrackingModal
-            alert={trackingAlert}
-            onClose={() => setTrackingAlert(null)}
-          />
-        </Suspense>
-      )}
     </div>
   );
 };

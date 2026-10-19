@@ -11,7 +11,6 @@ import {
   Lock,
   Crown
 } from 'lucide-react';
-import bcrypt from 'bcryptjs';
 import type { TecnicoItem } from '../types';
 
 interface AdministratorsManagementProps {
@@ -45,7 +44,7 @@ export const AdministratorsManagement: React.FC<AdministratorsManagementProps> =
     setNombres('');
     setApellidos('');
     setTelefono('');
-    setPassword('Admin@Segura2026!');
+    setPassword('');
     setShowModal(true);
   };
 
@@ -66,6 +65,11 @@ export const AdministratorsManagement: React.FC<AdministratorsManagementProps> =
       return;
     }
 
+    if (!editingAdmin && !password) {
+      alert('Debe asignar una contraseña al nuevo administrador. No se permiten claves por defecto.');
+      return;
+    }
+
     setSaving(true);
     try {
       if (editingAdmin) {
@@ -75,7 +79,8 @@ export const AdministratorsManagement: React.FC<AdministratorsManagementProps> =
           nombres,
           apellidos,
           telefono,
-          password: password ? bcrypt.hashSync(password, 10) : undefined,
+          // La contraseña viaja al servidor y se hashea con bcrypt (service_role).
+          password: password ? password : undefined,
         });
       } else {
         await onAddAdministrator({
@@ -83,7 +88,7 @@ export const AdministratorsManagement: React.FC<AdministratorsManagementProps> =
           nombres,
           apellidos,
           telefono,
-          password: password ? bcrypt.hashSync(password, 10) : bcrypt.hashSync('Admin@Segura2026!', 10),
+          password: password,
         });
       }
       setShowModal(false);
@@ -253,7 +258,9 @@ export const AdministratorsManagement: React.FC<AdministratorsManagementProps> =
                         <button
                           onClick={() => {
                             if (confirm(`¿Estás seguro de eliminar al administrador @${adm.usuario}?`)) {
-                              onDeleteAdministrator(adm.usuario);
+                              onDeleteAdministrator(adm.usuario).catch((err: unknown) =>
+                                alert(`Error al eliminar administrador: ${(err as Error)?.message || err}`)
+                              );
                             }
                           }}
                           style={{
@@ -423,7 +430,7 @@ export const AdministratorsManagement: React.FC<AdministratorsManagementProps> =
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={editingAdmin ? 'Dejar vacío para no cambiar' : 'Admin@Segura2026!'}
+                  placeholder={editingAdmin ? 'Dejar vacío para no cambiar' : 'Contraseña de acceso'}
                   style={{
                     width: '100%',
                     padding: '8px 12px',

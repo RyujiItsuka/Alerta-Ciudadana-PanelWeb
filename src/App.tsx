@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { Menu, ShieldAlert, Radio, Crown } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { UserSession, AlertaReporte, CiudadanoItem, TecnicoItem, SystemConfig } from './types';
@@ -16,12 +16,15 @@ const TechnicianDiagnostics = lazy(() => import('./components/TechnicianDiagnost
 const LiveTrackingModal = lazy(() => import('./components/LiveTrackingModal').then((m) => ({ default: m.LiveTrackingModal })));
 const SystemHealthDashboard = lazy(() => import('./components/SystemHealthDashboard').then((m) => ({ default: m.SystemHealthDashboard })));
 
-export function App() {
-  // Limpiar cualquier residuo de localStorage previo
-  try {
-    localStorage.removeItem('alerta_ciudadana_session');
-  } catch {}
+// Limpiar cualquier residuo de localStorage una única vez al cargar el módulo
+// (antes se ejecutaba en cada render del componente).
+try {
+  localStorage.removeItem('alerta_ciudadana_session');
+} catch {
+  // localStorage no disponible (modo privado): se ignora.
+}
 
+export function App() {
   // Persistencia de sesión exclusiva en sessionStorage (se destruye al cerrar la ventana)
   const [session, setSession] = useState<UserSession | null>(() => {
     try {
@@ -40,7 +43,7 @@ export function App() {
     }
   });
 
-  const playAlertSound = () => {
+  const playAlertSound = useCallback(() => {
     try {
       const audio = new Audio('/alerta.mp3');
       audio.volume = 1.0;
@@ -50,7 +53,7 @@ export function App() {
     } catch (err) {
       console.error('[AUDIO] Error instanciando audio:', err);
     }
-  };
+  }, []);
 
   const [currentTab, setCurrentTab] = useState<string>(() => {
     try {
@@ -108,7 +111,7 @@ export function App() {
   });
 
   // 1. Cargar Alertas desde Supabase
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('reporte')
@@ -145,21 +148,21 @@ export function App() {
           };
         });
         setAlerts(formatted);
-        if (!selectedAlertId && formatted.length > 0) {
-          setSelectedAlertId(formatted[0].id_reporte);
-        }
+        // Actualización funcional: conserva la selección del operador sin
+        // depender de `selectedAlertId` (evita cierres obsoletos).
+        setSelectedAlertId((prev) => prev ?? formatted[0]?.id_reporte ?? null);
       }
     } catch (err) {
       console.error('Fallo de red en loadAlerts:', err);
     }
-  };
+  }, []);
 
   // 2. Cargar Técnicos de Central (Tabla dedicada operador_central)
-  const loadTechnicians = async () => {
+  const loadTechnicians = useCallback(async () => {
     try {
       const { data: opData, error: opError } = await supabase
         .from('operador_central')
-        .select('*')
+        .select('id_operador,usuario,nombres,apellidos,telefono,rol,turno,estado,created_at')
         .eq('rol', 'tecnico')
         .order('id_operador', { ascending: false });
 
@@ -189,14 +192,14 @@ export function App() {
     } catch (err) {
       console.warn('Error cargando técnicos:', err);
     }
-  };
+  }, []);
 
   // 3. Cargar Administradores de Central (Tabla operador_central)
-  const loadAdministrators = async () => {
+  const loadAdministrators = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('operador_central')
-        .select('*')
+        .select('id_operador,usuario,nombres,apellidos,telefono,rol,turno,estado,created_at')
         .in('rol', ['admin', 'administrador'])
         .order('id_operador', { ascending: false });
 
@@ -206,10 +209,10 @@ export function App() {
     } catch (err) {
       console.warn('Error cargando administradores:', err);
     }
-  };
+  }, []);
 
   // 4. Cargar Ciudadanos (Tabla persona de vecinos de la App Móvil)
-  const loadCitizens = async () => {
+  const loadCitizens = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('persona')
@@ -231,17 +234,27 @@ export function App() {
     } catch {
       // Fallback
     }
-  };
+  }, []);
+
+  // Ref con el estado de sonido: permite leerlo dentro del canal Realtime sin
+  // re-suscribir el WebSocket cada vez que el usuario activa/desactiva el audio.
+  const soundEnabledRef = useRef(soundEnabled);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
 
   // 5. Suscripción en Tiempo Real (Supabase Realtime Channel)
   useEffect(() => {
-    // Carga inicial en paralelo sin bloquear
-    Promise.allSettled([
-      loadAlerts(),
-      loadTechnicians(),
-      loadAdministrators(),
-      loadCitizens(),
-    ]);
+    // Carga inicial en paralelo (diferida con setTimeout para no llamar setState
+    // de forma síncrona dentro del efecto y evitar renders en cascada).
+    const initialTimer = setTimeout(() => {
+      Promise.allSettled([
+        loadAlerts(),
+        loadTechnicians(),
+        loadAdministrators(),
+        loadCitizens(),
+      ]);
+    }, 0);
 
     const channel = supabase
       .channel('schema-db-changes')
@@ -249,10 +262,8 @@ export function App() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reporte' },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            if (soundEnabled) {
-              playAlertSound();
-            }
+          if (payload.eventType === 'INSERT' && soundEnabledRef.current) {
+            playAlertSound();
           }
           loadAlerts();
         }
@@ -260,9 +271,10 @@ export function App() {
       .subscribe();
 
     return () => {
+      clearTimeout(initialTimer);
       supabase.removeChannel(channel);
     };
-  }, [soundEnabled]);
+  }, [loadAlerts, loadTechnicians, loadAdministrators, loadCitizens, playAlertSound]);
 
   // Cambio de estado de alerta (Despacho de patrulla, resolución, etc.)
   const handleUpdateStatus = async (alertId: number, newStatusId: number, _statusName: string) => {
@@ -279,8 +291,6 @@ export function App() {
       if (error) {
         console.error('Error persistiendo nuevo estado en Supabase:', error.message);
         loadAlerts();
-      } else {
-        console.log(`[SUPABASE] Reporte #${alertId} actualizado exitosamente a estado ${newStatusId}`);
       }
     } catch (err) {
       console.warn('Error de red sincronizando estado con Supabase:', err);
@@ -288,117 +298,129 @@ export function App() {
     }
   };
 
-  // Gestión de Técnicos (CRUD en operador_central)
-  const handleAddTechnician = async (newTech: { usuario: string; nombres: string; apellidos: string; telefono: string; password?: string }) => {
-    const { data: opData, error: opError } = await supabase
-      .from('operador_central')
-      .insert({
-        usuario: newTech.usuario,
-        nombres: newTech.nombres,
-        apellidos: newTech.apellidos,
-        telefono: newTech.telefono,
-        password_hash: newTech.password || 'Tecnico@2026',
-        rol: 'tecnico',
-        turno: 'Mañana',
-        estado: 'activo',
-      })
-      .select()
-      .single();
+  // Invoca una acción administrativa de la Edge Function `security` enviando el
+  // token de staff. Centraliza el manejo de errores (401/403 -> mensaje).
+  const callStaffAction = async (
+    action: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ user?: TecnicoItem } & Record<string, unknown>> => {
+    if (!session?.token) {
+      throw new Error('Sesión no válida. Vuelva a iniciar sesión.');
+    }
+    const { data, error } = await supabase.functions.invoke('security', {
+      body: { action, token: session.token, ...payload },
+    });
+    if (error) {
+      let message = 'No se pudo completar la operación.';
+      try {
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const body = await ctx.json();
+          if (body?.error) message = body.error;
+        }
+      } catch {
+        // Sin cuerpo parseable: se usa el mensaje genérico.
+      }
+      throw new Error(message);
+    }
+    if (!data?.success) {
+      throw new Error(data?.error || 'No se pudo completar la operación.');
+    }
+    return data;
+  };
 
-    if (opError) {
-      throw opError;
+  // Gestión de Técnicos (CRUD en operador_central vía Edge Function `security`)
+  const handleAddTechnician = async (newTech: { usuario: string; nombres: string; apellidos: string; telefono: string; password?: string }) => {
+    if (!newTech.password) {
+      throw new Error('La contraseña del técnico es obligatoria.');
     }
 
-    if (opData) {
-      setTechnicians((prev) => [opData, ...prev]);
+    const res = await callStaffAction('staff-save', {
+      usuario: newTech.usuario,
+      nombres: newTech.nombres,
+      apellidos: newTech.apellidos,
+      telefono: newTech.telefono,
+      rol: 'tecnico',
+      turno: 'Mañana',
+      estado: 'activo',
+      password: newTech.password,
+    });
+
+    if (res?.user) {
+      setTechnicians((prev) => [res.user as TecnicoItem, ...prev]);
     }
   };
 
   const handleUpdateTechnician = async (updated: TecnicoItem) => {
-    const { error } = await supabase
-      .from('operador_central')
-      .update({
-        nombres: updated.nombres,
-        apellidos: updated.apellidos,
-        telefono: updated.telefono,
-      })
-      .eq('usuario', updated.usuario);
+    const res = await callStaffAction('staff-save', {
+      usuario: updated.usuario,
+      nombres: updated.nombres,
+      apellidos: updated.apellidos,
+      telefono: updated.telefono,
+      rol: 'tecnico',
+      turno: updated.turno ?? 'Mañana',
+      estado: updated.estado ?? 'activo',
+      ...(updated.password ? { password: updated.password } : {}),
+    });
 
-    if (error) {
-      console.error('Error al actualizar técnico:', error);
-      throw error;
-    }
-
+    // La contraseña NUNCA se conserva en el estado del navegador.
+    const { password: _ignoredPassword, ...cleanUpdated } = updated;
     setTechnicians((prev) =>
-      prev.map((t) => (t.usuario === updated.usuario ? { ...t, ...updated } : t))
+      prev.map((t) =>
+        t.usuario === updated.usuario ? { ...t, ...cleanUpdated, ...((res?.user as TecnicoItem) ?? {}) } : t
+      )
     );
   };
 
   const handleDeleteTechnician = async (usuario: string) => {
-    const { error } = await supabase
-      .from('operador_central')
-      .delete()
-      .eq('usuario', usuario);
-
-    if (error) {
-      console.error('Error al eliminar técnico:', error);
-      throw error;
-    }
-
+    await callStaffAction('staff-delete', { usuario });
     setTechnicians((prev) => prev.filter((t) => t.usuario !== usuario));
   };
 
-  // Gestión de Administradores (CRUD exclusivo para Superadmin)
+  // Gestión de Administradores (solo superadmin; validado en el servidor)
   const handleAddAdministrator = async (newAdmin: any) => {
-    const { data, error } = await supabase
-      .from('operador_central')
-      .insert({
-        usuario: newAdmin.usuario,
-        nombres: newAdmin.nombres,
-        apellidos: newAdmin.apellidos,
-        telefono: newAdmin.telefono,
-        password_hash: newAdmin.password_hash,
-        rol: 'administrador',
-        turno: 'Rotativo',
-        estado: 'activo',
-      })
-      .select()
-      .single();
+    if (!newAdmin.password) {
+      throw new Error('La contraseña del administrador es obligatoria.');
+    }
 
-    if (error) throw error;
-    if (data) {
-      setAdministrators((prev) => [data, ...prev]);
+    const res = await callStaffAction('staff-save', {
+      usuario: newAdmin.usuario,
+      nombres: newAdmin.nombres,
+      apellidos: newAdmin.apellidos,
+      telefono: newAdmin.telefono,
+      rol: 'administrador',
+      turno: 'Rotativo',
+      estado: 'activo',
+      password: newAdmin.password,
+    });
+
+    if (res?.user) {
+      setAdministrators((prev) => [res.user as TecnicoItem, ...prev]);
     }
   };
 
   const handleUpdateAdministrator = async (updated: any) => {
-    const payload: any = {
+    const res = await callStaffAction('staff-save', {
+      usuario: updated.usuario,
       nombres: updated.nombres,
       apellidos: updated.apellidos,
       telefono: updated.telefono,
-    };
-    if (updated.password_hash) {
-      payload.password_hash = updated.password_hash;
-    }
+      rol: 'administrador',
+      turno: updated.turno ?? 'Rotativo',
+      estado: updated.estado ?? 'activo',
+      ...(updated.password ? { password: updated.password } : {}),
+    });
 
-    const { error } = await supabase
-      .from('operador_central')
-      .update(payload)
-      .eq('usuario', updated.usuario);
-
-    if (error) throw error;
+    const { password: _ignoredPassword, ...cleanUpdated } = updated;
     setAdministrators((prev) =>
-      prev.map((a) => (a.usuario === updated.usuario ? { ...a, ...updated } : a))
+      prev.map((a) =>
+        a.usuario === updated.usuario ? { ...a, ...cleanUpdated, ...((res?.user as TecnicoItem) ?? {}) } : a
+      )
     );
   };
 
   const handleDeleteAdministrator = async (usuario: string) => {
-    const { error } = await supabase
-      .from('operador_central')
-      .delete()
-      .eq('usuario', usuario);
-
-    if (error) throw error;
+    await callStaffAction('staff-delete', { usuario });
     setAdministrators((prev) => prev.filter((a) => a.usuario !== usuario));
   };
 
@@ -685,7 +707,6 @@ export function App() {
           {activeTab === 'alertas' && !isSuperAdmin && (
             <AlertsPanel
               alerts={alerts}
-              session={session}
               onUpdateStatus={handleUpdateStatus}
               onSelectAlert={(a) => setSelectedAlertId(a.id_reporte)}
               selectedAlertId={selectedAlertId}

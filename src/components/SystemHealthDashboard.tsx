@@ -68,11 +68,11 @@ const INITIAL_SERVICES: ServiceStatus[] = [
   },
   {
     name: 'Autenticación Criptográfica',
-    provider: 'Módulo Local bcrypt (10 rounds)',
+    provider: 'Edge Function + bcrypt (service_role)',
     status: 'operational',
     latency: 5,
-    details: 'Tablas cuenta_soporte y operador_central con sal criptográfica segura',
-    endpoint: 'RPC / pg_catalog / bcryptjs',
+    details: 'Contraseñas hasheadas con bcrypt en el servidor; el navegador nunca ve hashes',
+    endpoint: 'supabase/functions/security (staff-save)',
   },
 ];
 
@@ -90,12 +90,9 @@ export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
 
   const runDiagnostics = useCallback(async () => {
     setChecking(true);
-    let currentList: ServiceStatus[] = [];
-    setServices((prev) => {
-      currentList = [...prev];
-      return prev;
-    });
-    const updatedServices = currentList.length > 0 ? [...currentList] : [...INITIAL_SERVICES];
+    // Se parte de la plantilla de servicios y se reemplaza cada entrada con el
+    // resultado real del sondeo (sin setState anidado).
+    const updatedServices: ServiceStatus[] = [...INITIAL_SERVICES];
 
     // 1. Diagnóstico Supabase DB
     const startDb = performance.now();
@@ -200,9 +197,14 @@ export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
   }, []);
 
   useEffect(() => {
-    runDiagnostics();
+    // El primer sondeo se difiere con setTimeout para no llamar setState de
+    // forma síncrona dentro del efecto (evita renders en cascada).
+    const initialTimer = setTimeout(runDiagnostics, 0);
     const interval = setInterval(runDiagnostics, 45000); // Chequeo periódico cada 45 seg
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, [runDiagnostics]);
 
   const allOperational = services.every((s) => s.status === 'operational');
@@ -301,7 +303,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
             <ShieldCheck size={20} color="#ef4444" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 800, color: 'white', marginTop: '10px' }}>
-            {totalAdmins || 1}
+            {totalAdmins}
           </div>
           <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 600 }}>Cuentas de mando municipal</span>
         </div>

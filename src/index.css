@@ -98,6 +98,22 @@ code, pre, .mono {
   animation: flash-red 1.5s infinite;
 }
 
+/* Spinner (indicadores de carga / diagnóstico) */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Pulso genérico (iconos de conexión en vivo) */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* =========================================================
    RESPONSIVE DESIGN SYSTEM (MOBILE & TABLET SUPPORT)
    ========================================================= */
