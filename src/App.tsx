@@ -253,6 +253,7 @@ export function App() {
         loadTechnicians(),
         loadAdministrators(),
         loadCitizens(),
+        loadSystemConfig(),
       ]);
     }, 0);
 
@@ -327,6 +328,33 @@ export function App() {
       throw new Error(data?.error || 'No se pudo completar la operación.');
     }
     return data;
+  };
+
+  // Configuración del sistema (número WhatsApp de la Central) persistida en
+  // `configuracion_sistema`. El destino lo resuelve el servidor al despachar,
+  // por lo que cambiarlo aquí NO exige actualizar ni recompilar la app móvil.
+  const loadSystemConfig = async () => {
+    try {
+      const res = await callStaffAction('get-config', {});
+      const cfg = (res?.config ?? {}) as Record<string, string>;
+      setSystemConfig((prev) => ({
+        ...prev,
+        phoneCentral: cfg.whatsapp_central || prev.phoneCentral,
+      }));
+    } catch (err) {
+      // Sin configuración cargada se conserva el valor por defecto en memoria.
+      console.warn('No se pudo cargar la configuración del sistema:', err);
+    }
+  };
+
+  const handleSaveConfig = async (updated: SystemConfig) => {
+    // Se persiste en el servidor ANTES de aplicarlo localmente: si falla, se
+    // propaga el error a la pantalla de configuración y no se guarda nada.
+    await callStaffAction('set-config', {
+      clave: 'whatsapp_central',
+      valor: updated.phoneCentral,
+    });
+    setSystemConfig(updated);
   };
 
   // Gestión de Técnicos (CRUD en operador_central vía Edge Function `security`)
@@ -756,7 +784,7 @@ export function App() {
           {activeTab === 'calibracion' && isSuperAdmin && (
             <TechnicianCalibration
               config={systemConfig}
-              onSaveConfig={(updated) => setSystemConfig(updated)}
+              onSaveConfig={handleSaveConfig}
             />
           )}
 

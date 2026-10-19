@@ -6,13 +6,16 @@ import {
   Save, 
   RotateCcw, 
   Info,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import type { SystemConfig } from '../types';
 
 interface TechnicianCalibrationProps {
   config: SystemConfig;
-  onSaveConfig: (updated: SystemConfig) => void;
+  // Persiste la configuración en el servidor (Edge Function `security`).
+  // Puede lanzar un error para que el usuario vea el motivo del fallo.
+  onSaveConfig: (updated: SystemConfig) => Promise<void> | void;
 }
 
 export const TechnicianCalibration: React.FC<TechnicianCalibrationProps> = ({
@@ -23,17 +26,35 @@ export const TechnicianCalibration: React.FC<TechnicianCalibrationProps> = ({
   const [shakeThreshold, setShakeThreshold] = useState(config.sensorShakeThreshold);
   const [gpsInterval, setGpsInterval] = useState(config.gpsTrackingIntervalSeconds);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  // Guarda el número de WhatsApp de la Central en la base de datos. El despacho
+  // lo resuelve en el servidor, así que el cambio aplica a todas las apps
+  // móviles sin necesidad de actualizarlas ni recompilar el APK.
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveConfig({
-      ...config,
-      phoneCentral: phone,
-      sensorShakeThreshold: shakeThreshold,
-      gpsTrackingIntervalSeconds: gpsInterval,
-    });
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setSaving(true);
+    setSaveError(null);
+    setSavedSuccess(false);
+    try {
+      await onSaveConfig({
+        ...config,
+        phoneCentral: phone,
+        sensorShakeThreshold: shakeThreshold,
+        gpsTrackingIntervalSeconds: gpsInterval,
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (err) {
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo guardar la configuración en el servidor.'
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleResetDefaults = () => {
@@ -77,13 +98,33 @@ export const TechnicianCalibration: React.FC<TechnicianCalibrationProps> = ({
         </div>
       )}
 
+      {saveError && (
+        <div style={{
+          padding: '12px 16px',
+          borderRadius: '8px',
+          background: 'rgba(239,68,68,0.15)',
+          border: '1px solid rgba(239,68,68,0.4)',
+          color: '#f87171',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13px',
+          fontWeight: 600,
+        }}>
+          <AlertTriangle size={16} />
+          {saveError}
+        </div>
+      )}
+
       <form onSubmit={handleSave} className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
             📞 Número Central de Recepción WhatsApp (Green-API)
           </label>
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-            Línea telefónica a la cual el backend despachará los mensajes de socorro de los ciudadanos.
+            Línea a la cual el backend despacha los mensajes de socorro. Se guarda en la base de datos
+            (tabla <code>configuracion_sistema</code>): el servidor la resuelve en cada alerta, así que el
+            cambio aplica al instante en todas las apps móviles, sin actualizar el APK.
           </span>
           <input
             type="text"
@@ -160,6 +201,7 @@ export const TechnicianCalibration: React.FC<TechnicianCalibrationProps> = ({
         <div style={{ display: 'flex', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
           <button
             type="submit"
+            disabled={saving}
             style={{
               padding: '12px 20px',
               borderRadius: '8px',
@@ -168,14 +210,15 @@ export const TechnicianCalibration: React.FC<TechnicianCalibrationProps> = ({
               color: 'white',
               fontWeight: 700,
               fontSize: '13px',
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.6 : 1,
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
             }}
           >
             <Save size={16} />
-            Guardar Configuración Técnica
+            {saving ? 'Guardando...' : 'Guardar Configuración Técnica'}
           </button>
 
           <button
@@ -214,7 +257,10 @@ export const TechnicianCalibration: React.FC<TechnicianCalibrationProps> = ({
       }}>
         <Info size={18} color="#38bdf8" style={{ flexShrink: 0, marginTop: '2px' }} />
         <span>
-          <strong>Nota de Arquitectura:</strong> Estos parámetros son leídos por la app móvil a través de Supabase en cada inicio de sesión, permitiendo calibrar la sensibilidad del sensor de arrebato sin obligar a los ciudadanos a reinstalar el APK.
+          <strong>Nota de Arquitectura:</strong> El número de WhatsApp de la Central se guarda en la base de
+          datos y lo resuelve el servidor (Edge Function <code>whatsapp</code>) en el momento de despachar,
+          por lo que puede cambiarse sin tocar la app. Los umbrales de sensores y el intervalo GPS siguen
+          siendo valores locales de cada dispositivo.
         </span>
       </div>
     </div>
