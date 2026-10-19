@@ -110,27 +110,48 @@ export function App() {
     greenApiActive: true,
   });
 
-  // 1. Cargar Alertas desde Supabase
+  // Invoca una acción de la Edge Function `security` enviando el token de
+  // staff. Centraliza el manejo de errores (401/403 -> mensaje).
+  //
+  // Se usa tanto para acciones administrativas (staff-save, set-config) como
+  // para las LECTURAS del panel (list-reportes, list-personas, list-operadores),
+  // porque el RLS de `persona` y `operador_central` está cerrado y únicamente
+  // la service_role (dentro de la Edge Function) puede consultarlas.
+  const callStaffAction = useCallback(async (
+    action: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ user?: TecnicoItem } & Record<string, unknown>> => {
+    if (!session?.token) {
+      throw new Error('Sesión no válida. Vuelva a iniciar sesión.');
+    }
+    const { data, error } = await supabase.functions.invoke('security', {
+      body: { action, token: session.token, ...payload },
+    });
+    if (error) {
+      let message = 'No se pudo completar la operación.';
+      try {
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const body = await ctx.json();
+          if (body?.error) message = body.error;
+        }
+      } catch {
+        // Sin cuerpo parseable: se usa el mensaje genérico.
+      }
+      throw new Error(message);
+    }
+    if (!data?.success) {
+      throw new Error(data?.error || 'No se pudo completar la operación.');
+    }
+    return data;
+  }, [session]);
+
+  // 1. Cargar Alertas desde Supabase (vía `security`, con token de staff)
   const loadAlerts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('reporte')
-        .select(`
-          id_reporte,
-          descripcion,
-          fecha_hora,
-          id_estado,
-          direccion_texto,
-          tipo_incidencia (nombre),
-          ubicacion (latitud, longitud),
-          persona (nombres, apellidos, telefono, dni)
-        `)
-        .order('fecha_hora', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.warn('Error cargando alertas de Supabase:', error.message);
-      } else if (data && data.length > 0) {
+      const res = await callStaffAction('list-reportes', { limit: 50 });
+      const data = (res?.reportes ?? []) as any[];
+      if (data.length > 0) {
         const formatted: AlertaReporte[] = data.map((item: any) => {
           const ubi = Array.isArray(item.ubicacion) && item.ubicacion.length > 0 ? item.ubicacion[0] : (item.ubicacion || null);
           return {
@@ -155,86 +176,89 @@ export function App() {
     } catch (err) {
       console.error('Fallo de red en loadAlerts:', err);
     }
-  }, []);
+  }, [callStaffAction]);
 
-  // 2. Cargar Técnicos de Central (Tabla dedicada operador_central)
+  // 2. Cargar Técnicos de Central (operador_central vía Edge Function `security`)
   const loadTechnicians = useCallback(async () => {
     try {
-      const { data: opData, error: opError } = await supabase
-        .from('operador_central')
-        .select('id_operador,usuario,nombres,apellidos,telefono,rol,turno,estado,created_at')
-        .eq('rol', 'tecnico')
-        .order('id_operador', { ascending: false });
-
-      if (!opError && opData && opData.length > 0) {
-        setTechnicians(opData);
-        return;
-      }
-
-      // Fallback a persona
-      const { data, error } = await supabase
-        .from('persona')
-        .select('id_persona, dni, nombres, apellidos, telefono, rol, created_at')
-        .eq('rol', 'tecnico')
-        .order('id_persona', { ascending: false });
-
-      if (!error && data) {
-        setTechnicians(data.map((t: any) => ({
-          id_operador: t.id_persona,
-          usuario: t.dni,
-          nombres: t.nombres,
-          apellidos: t.apellidos,
-          telefono: t.telefono,
-          rol: t.rol,
-          created_at: t.created_at,
-        })));
-      }
+      const res = await callStaffAction('list-operadores', { roles: ['tecnico'] });
+      setTechnicians((res?.operadores ?? []) as TecnicoItem[]);
     } catch (err) {
       console.warn('Error cargando técnicos:', err);
     }
-  }, []);
+  }, [callStaffAction]);
 
-  // 3. Cargar Administradores de Central (Tabla operador_central)
+  // 3. Cargar Administradores de Central (operador_central vía `security`)
   const loadAdministrators = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('operador_central')
-        .select('id_operador,usuario,nombres,apellidos,telefono,rol,turno,estado,created_at')
-        .in('rol', ['admin', 'administrador'])
-        .order('id_operador', { ascending: false });
-
-      if (!error && data) {
-        setAdministrators(data);
-      }
+      const res = await callStaffAction('list-operadores', {
+        roles: ['admin', 'administrador'],
+      });
+      setAdministrators((res?.operadores ?? []) as any[]);
     } catch (err) {
       console.warn('Error cargando administradores:', err);
     }
-  }, []);
+  }, [callStaffAction]);
 
-  // 4. Cargar Ciudadanos (Tabla persona de vecinos de la App Móvil)
+  // 4. Cargar Ciudadanos (persona de vecinos de la App Móvil, vía `security`)
   const loadCitizens = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('persona')
-        .select('id_persona, dni, nombres, apellidos, telefono, rol, created_at')
-        .neq('rol', 'admin')
-        .neq('rol', 'administrador')
-        .neq('rol', 'tecnico')
-        .order('id_persona', { ascending: false })
-        .limit(100);
-
-      if (!error && data && data.length > 0) {
-        setCitizens(data.map((c: any) => ({
-          ...c,
-          estado_cuenta: 'activo',
-        })));
-      } else {
-        setCitizens([]);
-      }
+      const res = await callStaffAction('list-personas', { limit: 100 });
+      const data = (res?.personas ?? []) as any[];
+      // Mantiene el criterio anterior: no se listan cuentas del personal.
+      const personal = new Set(['admin', 'administrador', 'tecnico']);
+      setCitizens(
+        data
+          .filter((c: any) => !personal.has(String(c.rol ?? '').toLowerCase()))
+          .map((c: any) => ({
+            ...c,
+            estado_cuenta: 'activo',
+          }))
+      );
     } catch {
-      // Fallback
+      // Sin datos no se rompe la pantalla: queda la lista vacía.
+      setCitizens([]);
     }
-  }, []);
+  }, [callStaffAction]);
+
+  // Configuración del sistema (número WhatsApp de la Central) persistida en
+  // `configuracion_sistema`. El destino lo resuelve el servidor al despachar,
+  // por lo que cambiarlo aquí NO exige actualizar ni recompilar la app móvil.
+  const loadSystemConfig = useCallback(async () => {
+    try {
+      const res = await callStaffAction('get-config', {});
+      const cfg = (res?.config ?? {}) as Record<string, string>;
+      setSystemConfig((prev) => ({
+        ...prev,
+        phoneCentral: cfg.whatsapp_central || prev.phoneCentral,
+      }));
+    } catch (err) {
+      // Sin configuración cargada se conserva el valor por defecto en memoria.
+      console.warn('No se pudo cargar la configuración del sistema:', err);
+    }
+  }, [callStaffAction]);
+
+  const handleSaveConfig = async (updated: SystemConfig) => {
+    // Se persiste en el servidor ANTES de aplicarlo localmente: si falla, se
+    // propaga el error a la pantalla de configuración y no se guarda nada.
+    await callStaffAction('set-config', {
+      clave: 'whatsapp_central',
+      valor: updated.phoneCentral,
+    });
+    setSystemConfig(updated);
+  };
+
+  // Sonda de la base de datos para el panel de salud del sistema. Va por la
+  // Edge Function `security`: el RLS de persona / operador_central está
+  // cerrado, así que una consulta directa con la clave anon sería denegada.
+  const handleCheckDatabase = useCallback(async () => {
+    const res = await callStaffAction('db-health', {});
+    return {
+      ok: !!res.success,
+      latencyMs: Number(res.latencyMs ?? 0),
+      details: (res.error as string) || undefined,
+    };
+  }, [callStaffAction]);
 
   // Ref con el estado de sonido: permite leerlo dentro del canal Realtime sin
   // re-suscribir el WebSocket cada vez que el usuario activa/desactiva el audio.
@@ -275,7 +299,7 @@ export function App() {
       clearTimeout(initialTimer);
       supabase.removeChannel(channel);
     };
-  }, [loadAlerts, loadTechnicians, loadAdministrators, loadCitizens, playAlertSound]);
+  }, [loadAlerts, loadTechnicians, loadAdministrators, loadCitizens, loadSystemConfig, playAlertSound]);
 
   // Cambio de estado de alerta (Despacho de patrulla, resolución, etc.)
   const handleUpdateStatus = async (alertId: number, newStatusId: number, _statusName: string) => {
@@ -297,64 +321,6 @@ export function App() {
       console.warn('Error de red sincronizando estado con Supabase:', err);
       loadAlerts();
     }
-  };
-
-  // Invoca una acción administrativa de la Edge Function `security` enviando el
-  // token de staff. Centraliza el manejo de errores (401/403 -> mensaje).
-  const callStaffAction = async (
-    action: string,
-    payload: Record<string, unknown>,
-  ): Promise<{ user?: TecnicoItem } & Record<string, unknown>> => {
-    if (!session?.token) {
-      throw new Error('Sesión no válida. Vuelva a iniciar sesión.');
-    }
-    const { data, error } = await supabase.functions.invoke('security', {
-      body: { action, token: session.token, ...payload },
-    });
-    if (error) {
-      let message = 'No se pudo completar la operación.';
-      try {
-        const ctx = (error as { context?: Response }).context;
-        if (ctx && typeof ctx.json === 'function') {
-          const body = await ctx.json();
-          if (body?.error) message = body.error;
-        }
-      } catch {
-        // Sin cuerpo parseable: se usa el mensaje genérico.
-      }
-      throw new Error(message);
-    }
-    if (!data?.success) {
-      throw new Error(data?.error || 'No se pudo completar la operación.');
-    }
-    return data;
-  };
-
-  // Configuración del sistema (número WhatsApp de la Central) persistida en
-  // `configuracion_sistema`. El destino lo resuelve el servidor al despachar,
-  // por lo que cambiarlo aquí NO exige actualizar ni recompilar la app móvil.
-  const loadSystemConfig = async () => {
-    try {
-      const res = await callStaffAction('get-config', {});
-      const cfg = (res?.config ?? {}) as Record<string, string>;
-      setSystemConfig((prev) => ({
-        ...prev,
-        phoneCentral: cfg.whatsapp_central || prev.phoneCentral,
-      }));
-    } catch (err) {
-      // Sin configuración cargada se conserva el valor por defecto en memoria.
-      console.warn('No se pudo cargar la configuración del sistema:', err);
-    }
-  };
-
-  const handleSaveConfig = async (updated: SystemConfig) => {
-    // Se persiste en el servidor ANTES de aplicarlo localmente: si falla, se
-    // propaga el error a la pantalla de configuración y no se guarda nada.
-    await callStaffAction('set-config', {
-      clave: 'whatsapp_central',
-      valor: updated.phoneCentral,
-    });
-    setSystemConfig(updated);
   };
 
   // Gestión de Técnicos (CRUD en operador_central vía Edge Function `security`)
@@ -477,22 +443,12 @@ export function App() {
       setStandaloneLoading(true);
       setStandaloneError(null);
       try {
-        const { data, error } = await supabase
-          .from('reporte')
-          .select(`
-            id_reporte,
-            descripcion,
-            fecha_hora,
-            id_estado,
-            direccion_texto,
-            tipo_incidencia (nombre),
-            ubicacion (latitud, longitud),
-            persona (nombres, apellidos, telefono, dni)
-          `)
-          .eq('id_reporte', Number(trackingParam))
-          .single();
+        const res = await callStaffAction('list-reportes', {
+          id_reporte: Number(trackingParam),
+        });
+        const data = ((res?.reportes ?? []) as any[])[0];
 
-        if (error || !data) {
+        if (!data) {
           setStandaloneError('No se encontró la alerta de rastreo o la señal fue finalizada.');
         } else {
           const item: any = data;
@@ -520,7 +476,7 @@ export function App() {
       }
     };
     fetchStandaloneAlert();
-  }, [trackingParam]);
+  }, [trackingParam, callStaffAction]);
 
   // Si la ventana fue abierta como monitor independiente de rastreo
   if (trackingParam) {
@@ -728,6 +684,7 @@ export function App() {
               totalAdmins={administrators.length}
               totalTechnicians={technicians.length}
               totalCitizens={citizens.length}
+              onCheckDatabase={handleCheckDatabase}
             />
           )}
 

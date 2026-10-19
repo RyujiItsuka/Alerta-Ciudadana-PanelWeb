@@ -22,6 +22,10 @@ interface SystemHealthProps {
   totalAdmins?: number;
   totalTechnicians?: number;
   totalCitizens?: number;
+  // Sonda la base de datos a través de la Edge Function `security`. El RLS de
+  // persona / operador_central está cerrado, por lo que una consulta directa
+  // desde el navegador (clave anon) siempre sería denegada.
+  onCheckDatabase?: () => Promise<{ ok: boolean; latencyMs: number; details?: string }>;
 }
 
 interface ServiceStatus {
@@ -80,6 +84,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
   totalAdmins = 0,
   totalTechnicians = 0,
   totalCitizens = 0,
+  onCheckDatabase,
 }) => {
   const [checking, setChecking] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState<Date>(() => new Date());
@@ -94,27 +99,32 @@ export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
     // resultado real del sondeo (sin setState anidado).
     const updatedServices: ServiceStatus[] = [...INITIAL_SERVICES];
 
-    // 1. Diagnóstico Supabase DB
+    // 1. Diagnóstico Supabase DB (vía Edge Function `security`, con token de
+    //    staff: el RLS de persona / operador_central está cerrado).
     const startDb = performance.now();
     try {
-      const { error } = await supabase.from('operador_central').select('id_operador').limit(1);
-      const endDb = performance.now();
-      const latencyDb = Math.round(endDb - startDb);
+      if (!onCheckDatabase) {
+        throw new Error('Se requiere una sesión del personal para sondear la base de datos.');
+      }
+      const result = await onCheckDatabase();
+      const latencyDb = result.latencyMs || Math.round(performance.now() - startDb);
 
       updatedServices[0] = {
         ...updatedServices[0],
-        status: error ? 'degraded' : 'operational',
+        status: result.ok ? 'operational' : 'degraded',
         latency: latencyDb,
-        details: error 
-          ? `Alerta de consulta: ${error.message}` 
-          : `Respuesta óptima del motor relacional en ${latencyDb} ms`,
+        details: result.ok
+          ? `Respuesta óptima del motor relacional en ${latencyDb} ms`
+          : `Alerta de consulta: ${result.details || 'sin detalle'}`,
       };
-    } catch {
+    } catch (err) {
       updatedServices[0] = {
         ...updatedServices[0],
         status: 'down',
         latency: null,
-        details: 'No se pudo contactar el clúster de base de datos',
+        details: err instanceof Error
+          ? err.message
+          : 'No se pudo contactar el clúster de base de datos',
       };
     }
 
@@ -194,7 +204,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthProps> = ({
     setServices(updatedServices);
     setLastCheckTime(new Date());
     setChecking(false);
-  }, []);
+  }, [onCheckDatabase]);
 
   useEffect(() => {
     // El primer sondeo se difiere con setTimeout para no llamar setState de
