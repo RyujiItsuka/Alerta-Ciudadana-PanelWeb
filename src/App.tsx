@@ -15,6 +15,7 @@ const TechnicianCalibration = lazy(() => import('./components/TechnicianCalibrat
 const TechnicianDiagnostics = lazy(() => import('./components/TechnicianDiagnostics').then((m) => ({ default: m.TechnicianDiagnostics })));
 const LiveTrackingModal = lazy(() => import('./components/LiveTrackingModal').then((m) => ({ default: m.LiveTrackingModal })));
 const SystemHealthDashboard = lazy(() => import('./components/SystemHealthDashboard').then((m) => ({ default: m.SystemHealthDashboard })));
+const CatalogoServicios = lazy(() => import('./components/CatalogoServicios').then((m) => ({ default: m.CatalogoServicios })));
 
 // Limpiar cualquier residuo de localStorage una única vez al cargar el módulo
 // (antes se ejecutaba en cada render del componente).
@@ -748,6 +749,11 @@ export function App() {
           {/* 7. Auditoría & WhatsApp (Exclusivo Superadmin / Desarrollador) */}
           {activeTab === 'diagnostico' && isSuperAdmin && (
             <TechnicianDiagnostics />
+          )}
+
+          {/* 8. Catálogo de Servicios & Base de Conocimiento (Técnicos y Administrador) */}
+          {activeTab === 'soporte' && !isSuperAdmin && (
+            <CatalogoServicios />
           )}
         </Suspense>
       </main>

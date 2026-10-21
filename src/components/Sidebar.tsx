@@ -14,7 +14,8 @@ import {
   Server,
   X,
   Volume2,
-  VolumeX
+  VolumeX,
+  BookOpen
 } from 'lucide-react';
 import type { UserSession } from '../types';
 
@@ -200,6 +201,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <BellRing size={18} />
               <span>Historial de Alertas</span>
             </button>
+
+            <button
+              onClick={() => onTabChange('soporte')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentTab === 'soporte' ? themeBgActive : 'transparent',
+                color: currentTab === 'soporte' ? 'white' : 'var(--text-muted)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <BookOpen size={18} />
+              <span>Catálogo de Servicios</span>
+            </button>
           </>
         )}
 
@@ -377,6 +399,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Users size={18} />
               <span>Gestión de Ciudadanos</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('soporte')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: currentTab === 'soporte' ? themeBgActive : 'transparent',
+                color: currentTab === 'soporte' ? 'white' : 'var(--text-muted)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <BookOpen size={18} />
+              <span>Catálogo de Servicios</span>
             </button>
           </>
         )}
