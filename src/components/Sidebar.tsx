@@ -202,26 +202,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>Historial de Alertas</span>
             </button>
 
-            <button
-              onClick={() => onTabChange('soporte')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '12px 14px',
-                borderRadius: '8px',
-                border: 'none',
-                background: currentTab === 'soporte' ? themeBgActive : 'transparent',
-                color: currentTab === 'soporte' ? 'white' : 'var(--text-muted)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <BookOpen size={18} />
-              <span>Catálogo de Servicios</span>
-            </button>
+            {/* Catálogo de Servicios: visible solo para el TÉCNICO. El
+                administrador lo ve en su propio bloque (isAdmin), que está
+                más abajo. Sin esta condición, un administrador cumple
+                `!isSuperAdmin` y también `isAdmin`, y el ítem se le
+                duplicaba en el menú. */}
+            {!isAdmin && (
+              <button
+                onClick={() => onTabChange('soporte')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: currentTab === 'soporte' ? themeBgActive : 'transparent',
+                  color: currentTab === 'soporte' ? 'white' : 'var(--text-muted)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <BookOpen size={18} />
+                <span>Catálogo de Servicios</span>
+              </button>
+            )}
           </>
         )}
 
