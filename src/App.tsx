@@ -309,17 +309,15 @@ export function App() {
     );
 
     try {
-      const { error } = await supabase
-        .from('reporte')
-        .update({ id_estado: newStatusId })
-        .eq('id_reporte', alertId);
-
-      if (error) {
-        console.error('Error persistiendo nuevo estado en Supabase:', error.message);
-        loadAlerts();
-      }
+      // La actualización pasa por el servidor (Edge Function `security`), que
+      // valida el token de staff. El panel ya no escribe directo en la tabla
+      // `reporte` con la clave anónima.
+      await callStaffAction('update-reporte-estado', {
+        id_reporte: alertId,
+        id_estado: newStatusId,
+      });
     } catch (err) {
-      console.warn('Error de red sincronizando estado con Supabase:', err);
+      console.error('Error persistiendo nuevo estado:', err);
       loadAlerts();
     }
   };
