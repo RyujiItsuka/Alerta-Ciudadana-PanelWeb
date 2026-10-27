@@ -229,7 +229,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                       fontSize: '11px',
                     }}>
                       <span style={{ color: 'var(--text-muted)' }}>
-                        Víctima: <strong style={{ color: 'white' }}>{a.ciudadano.nombres} {a.ciudadano.apellidos}</strong> (DNI: {a.ciudadano.dni})
+                        Reportante: <strong style={{ color: 'white' }}>{[a.ciudadano.nombres, a.ciudadano.apellidos].filter(Boolean).join(' ') || 'Ciudadano'}</strong> (DNI: {a.ciudadano.dni})
                       </span>
                       <span style={{ color: '#38bdf8', fontWeight: 600 }}>
                         +51 {a.ciudadano.telefono}
@@ -310,10 +310,10 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
 
                   <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', fontSize: '13px' }}>
                     <div style={{ fontWeight: 700, color: 'white', marginBottom: '6px' }}>
-                      Datos del Ciudadano Afectado:
+                      Datos del Reportante (Ciudadano):
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: 'var(--text-muted)' }}>
-                      <div>Nombre: <strong style={{ color: '#f1f5f9' }}>{current.ciudadano?.nombres || 'No especificado'}</strong></div>
+                      <div>Nombre: <strong style={{ color: '#f1f5f9' }}>{[current.ciudadano?.nombres, current.ciudadano?.apellidos].filter(Boolean).join(' ') || 'No especificado'}</strong></div>
                       <div>DNI: <strong style={{ color: '#f1f5f9' }}>{current.ciudadano?.dni || 'Sin DNI'}</strong></div>
                       <div>Teléfono: <strong style={{ color: '#38bdf8' }}>{current.ciudadano?.telefono || 'No reg.'}</strong></div>
                       <div>Lugar: <strong style={{ color: '#f87171' }}>{current.ubicacion?.direccion_texto || 'Pisco'}</strong></div>

@@ -329,7 +329,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                       fontSize: '11px',
                     }}>
                       <span style={{ color: 'var(--text-muted)' }}>
-                        Emisor: <strong style={{ color: 'white' }}>{a.ciudadano.nombres} {a.ciudadano.apellidos}</strong> (DNI: {a.ciudadano.dni})
+                        Reportante: <strong style={{ color: 'white' }}>{[a.ciudadano.nombres, a.ciudadano.apellidos].filter(Boolean).join(' ') || 'Ciudadano'}</strong> (DNI: {a.ciudadano.dni})
                       </span>
                       <span style={{ color: '#38bdf8', fontWeight: 600 }}>
                         +51 {a.ciudadano.telefono}
@@ -372,10 +372,10 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                   <div style={{ background: 'rgba(0,0,0,0.3)', padding: '14px', borderRadius: '8px', fontSize: '13px' }}>
                     <div style={{ fontWeight: 700, color: 'white', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Smartphone size={16} color="#38bdf8" />
-                      Usuario Emisor desde la App:
+                      Reportante (Ciudadano):
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: 'var(--text-muted)' }}>
-                      <div>Nombres: <strong style={{ color: '#f1f5f9' }}>{current.ciudadano?.nombres || 'Ciudadano'}</strong></div>
+                      <div>Nombre: <strong style={{ color: '#f1f5f9' }}>{[current.ciudadano?.nombres, current.ciudadano?.apellidos].filter(Boolean).join(' ') || 'Ciudadano'}</strong></div>
                       <div>DNI: <strong style={{ color: '#f1f5f9' }}>{current.ciudadano?.dni || 'No reg.'}</strong></div>
                       <div>Teléfono Móvil: <strong style={{ color: '#38bdf8' }}>+51 {current.ciudadano?.telefono || 'No reg.'}</strong></div>
                       <div>Estado: <strong style={{ color: '#34d399' }}>Cuenta Verificada</strong></div>
