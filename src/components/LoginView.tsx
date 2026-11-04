@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Lock, ArrowRight, User } from 'lucide-react';
+import { Shield, Lock, ArrowRight, User, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { UserSession } from '../types';
 
@@ -10,6 +10,7 @@ interface LoginModalProps {
 export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
   const [dniOrUser, setDniOrUser] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -134,14 +135,15 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
             </label>
             <div style={{ position: 'relative' }}>
               <input
-                type="password"
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 style={{
                   width: '100%',
-                  padding: '13px 14px 13px 42px',
+                  padding: '13px 48px 13px 42px',
                   borderRadius: '10px',
                   border: '1px solid var(--border-color)',
                   background: 'rgba(0,0,0,0.4)',
@@ -152,6 +154,32 @@ export const LoginView: React.FC<LoginModalProps> = ({ onLogin }) => {
                 }}
               />
               <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                aria-pressed={showPassword}
+                aria-controls="login-password"
+                title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                style={{
+                  position: 'absolute',
+                  right: '2px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: '44px',
+                  height: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+              </button>
             </div>
           </div>
 
