@@ -202,14 +202,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>Historial de Alertas</span>
             </button>
 
-            {/* Catálogo de Servicios: visible solo para el TÉCNICO. El
-                administrador lo ve en su propio bloque (isAdmin), que está
-                más abajo. Sin esta condición, un administrador cumple
-                `!isSuperAdmin` y también `isAdmin`, y el ítem se le
-                duplicaba en el menú. */}
             {!isAdmin && (
               <button
-                onClick={() => onTabChange('soporte')}
+                onClick={() => window.open('https://utp-teamsoc-yli1f0tw.atlassian.net/servicedesk/customer/portal/1', '_blank')}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -217,8 +212,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   padding: '12px 14px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: currentTab === 'soporte' ? themeBgActive : 'transparent',
-                  color: currentTab === 'soporte' ? 'white' : 'var(--text-muted)',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
                   fontWeight: 600,
                   fontSize: '13px',
                   cursor: 'pointer',
@@ -226,7 +221,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
               >
                 <BookOpen size={18} />
-                <span>Catálogo de Servicios</span>
+                <span>Soporte</span>
               </button>
             )}
           </>
@@ -409,7 +404,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
-              onClick={() => onTabChange('soporte')}
+              onClick={() => window.open('https://utp-teamsoc-yli1f0tw.atlassian.net/servicedesk/customer/portal/1', '_blank')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -417,8 +412,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 padding: '12px 14px',
                 borderRadius: '8px',
                 border: 'none',
-                background: currentTab === 'soporte' ? themeBgActive : 'transparent',
-                color: currentTab === 'soporte' ? 'white' : 'var(--text-muted)',
+                background: 'transparent',
+                color: 'var(--text-muted)',
                 fontWeight: 600,
                 fontSize: '13px',
                 cursor: 'pointer',
@@ -426,7 +421,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
             >
               <BookOpen size={18} />
-              <span>Catálogo de Servicios</span>
+              <span>Soporte</span>
             </button>
           </>
         )}
