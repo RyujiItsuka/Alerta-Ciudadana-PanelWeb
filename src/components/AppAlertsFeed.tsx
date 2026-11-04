@@ -304,7 +304,7 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                     })()}
                   </div>
 
-                  <p style={{ fontSize: '13px', color: '#f1f5f9', marginBottom: '10px', lineHeight: '1.4' }}>
+                  <p style={{ fontSize: '13px', color: '#f1f5f9', marginBottom: '10px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {a.descripcion}
                   </p>
 
@@ -395,7 +395,9 @@ export const AppAlertsFeed: React.FC<AppAlertsFeedProps> = ({
                       border: '1px solid var(--border-color)',
                       color: 'white',
                       fontSize: '13px',
-                      lineHeight: '1.4',
+                      lineHeight: '1.5',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
                     }}>
                       {current.descripcion}
                     </div>
