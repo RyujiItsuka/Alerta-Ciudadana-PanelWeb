@@ -202,7 +202,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({
                     {getStatusBadge(a.id_estado)}
                   </div>
 
-                  <p style={{ fontSize: '13px', color: '#e2e8f0', marginBottom: '10px', lineHeight: '1.4' }}>
+                  <p style={{ fontSize: '13px', color: '#e2e8f0', marginBottom: '10px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {a.descripcion}
                   </p>
 
