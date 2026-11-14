@@ -277,6 +277,10 @@ export function App() {
 
   // 5. Suscripción en Tiempo Real (Supabase Realtime Channel)
   useEffect(() => {
+    // Sin sesión (pantalla de acceso) no se cargan datos ni se arranca el
+    // sondeo: todas las lecturas requieren el token del personal.
+    if (!session?.token) return;
+
     // Carga inicial en paralelo (diferida con setTimeout para no llamar setState
     // de forma síncrona dentro del efecto y evitar renders en cascada).
     const initialTimer = setTimeout(() => {
@@ -348,7 +352,7 @@ export function App() {
       supabase.removeChannel(centralChannel);
       supabase.removeChannel(legacyChannel);
     };
-  }, [loadAlerts, loadTechnicians, loadAdministrators, loadCitizens, loadSystemConfig, playAlertSound]);
+  }, [session?.token, loadAlerts, loadTechnicians, loadAdministrators, loadCitizens, loadSystemConfig, playAlertSound]);
 
   // Cambio de estado de alerta (Despacho de patrulla, resolución, etc.)
   const handleUpdateStatus = async (alertId: number, newStatusId: number, _statusName: string) => {
