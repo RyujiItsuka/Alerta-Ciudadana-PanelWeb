@@ -13,6 +13,7 @@ const AdministratorsManagement = lazy(() => import('./components/AdministratorsM
 const CitizensManagement = lazy(() => import('./components/CitizensManagement').then((m) => ({ default: m.CitizensManagement })));
 const TechnicianCalibration = lazy(() => import('./components/TechnicianCalibration').then((m) => ({ default: m.TechnicianCalibration })));
 const TechnicianDiagnostics = lazy(() => import('./components/TechnicianDiagnostics').then((m) => ({ default: m.TechnicianDiagnostics })));
+import type { TrackingData } from './components/LiveTrackingModal';
 const LiveTrackingModal = lazy(() => import('./components/LiveTrackingModal').then((m) => ({ default: m.LiveTrackingModal })));
 const SystemHealthDashboard = lazy(() => import('./components/SystemHealthDashboard').then((m) => ({ default: m.SystemHealthDashboard })));
 const CatalogoServicios = lazy(() => import('./components/CatalogoServicios').then((m) => ({ default: m.CatalogoServicios })));
@@ -148,7 +149,7 @@ export function App() {
   }, [session]);
 
   // 1. Cargar Alertas desde Supabase (vía `security`, con token de staff)
-  const loadAlerts = useCallback(async () => {
+  const loadAlerts = useCallback(async (): Promise<number[]> => {
     try {
       const res = await callStaffAction('list-reportes', { limit: 50 });
       const data = (res?.reportes ?? []) as any[];
@@ -173,9 +174,12 @@ export function App() {
         // Actualización funcional: conserva la selección del operador sin
         // depender de `selectedAlertId` (evita cierres obsoletos).
         setSelectedAlertId((prev) => prev ?? formatted[0]?.id_reporte ?? null);
+        return formatted.map((a) => a.id_reporte);
       }
+      return [];
     } catch (err) {
       console.error('Fallo de red en loadAlerts:', err);
+      return [];
     }
   }, [callStaffAction]);
 
@@ -264,17 +268,23 @@ export function App() {
   // Ref con el estado de sonido: permite leerlo dentro del canal Realtime sin
   // re-suscribir el WebSocket cada vez que el usuario activa/desactiva el audio.
   const soundEnabledRef = useRef(soundEnabled);
+  // Reportes que ya hicieron sonar la alarma (evita sonar dos veces cuando
+  // llegan por Broadcast y por postgres_changes).
+  const notifiedReportsRef = useRef<Set<number>>(new Set());
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
 
   // 5. Suscripción en Tiempo Real (Supabase Realtime Channel)
   useEffect(() => {
+    // Sin sesión (pantalla de acceso) no se cargan datos ni se arranca el
+    // sondeo: todas las lecturas requieren el token del personal.
+    if (!session?.token) return;
+
     // Carga inicial en paralelo (diferida con setTimeout para no llamar setState
     // de forma síncrona dentro del efecto y evitar renders en cascada).
     const initialTimer = setTimeout(() => {
       Promise.allSettled([
-        loadAlerts(),
         loadTechnicians(),
         loadAdministrators(),
         loadCitizens(),
@@ -282,25 +292,67 @@ export function App() {
       ]);
     }, 0);
 
-    const channel = supabase
+    // Avisos de reportes nuevos. Fuente principal: Realtime Broadcast en el
+    // canal público 'central', que solo trae el id_reporte (sin datos). Los
+    // datos siempre se piden a `security` con el token del personal.
+    // Durante la transición se mantiene postgres_changes como segunda fuente
+    // (deja de emitir cuando se cierre el SELECT anónimo) y un sondeo cada
+    // 15 s cubre la caída de ambos. Cada reporte suena una sola vez.
+    const notified = notifiedReportsRef.current;
+    const notifyNew = (idReporte: unknown) => {
+      const id = Number(idReporte);
+      if (!Number.isInteger(id) || id <= 0 || notified.has(id)) return;
+      notified.add(id);
+      if (soundEnabledRef.current) playAlertSound();
+    };
+    const knownMax = { value: 0 };
+    const refresh = async (soundForNew: boolean) => {
+      const ids = await loadAlerts();
+      const max = ids.length ? Math.max(...ids) : 0;
+      if (soundForNew && knownMax.value > 0) {
+        ids.filter((id) => id > knownMax.value).forEach((id) => notifyNew(id));
+      } else {
+        ids.forEach((id) => notified.add(id));
+      }
+      knownMax.value = Math.max(knownMax.value, max);
+    };
+
+    const centralChannel = supabase
+      .channel('central')
+      .on('broadcast', { event: 'reporte_nuevo' }, (msg) => {
+        notifyNew(msg?.payload?.id_reporte);
+        refresh(false);
+      })
+      .on('broadcast', { event: 'reporte_actualizado' }, () => {
+        refresh(false);
+      })
+      .subscribe();
+
+    const legacyChannel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reporte' },
         (payload) => {
-          if (payload.eventType === 'INSERT' && soundEnabledRef.current) {
-            playAlertSound();
+          if (payload.eventType === 'INSERT') {
+            notifyNew((payload.new as { id_reporte?: unknown })?.id_reporte);
           }
-          loadAlerts();
+          refresh(false);
         }
       )
       .subscribe();
 
+    const firstLoad = setTimeout(() => { refresh(false); }, 0);
+    const pollTimer = setInterval(() => { refresh(true); }, 15000);
+
     return () => {
       clearTimeout(initialTimer);
-      supabase.removeChannel(channel);
+      clearTimeout(firstLoad);
+      clearInterval(pollTimer);
+      supabase.removeChannel(centralChannel);
+      supabase.removeChannel(legacyChannel);
     };
-  }, [loadAlerts, loadTechnicians, loadAdministrators, loadCitizens, loadSystemConfig, playAlertSound]);
+  }, [session?.token, loadAlerts, loadTechnicians, loadAdministrators, loadCitizens, loadSystemConfig, playAlertSound]);
 
   // Cambio de estado de alerta (Despacho de patrulla, resolución, etc.)
   const handleUpdateStatus = async (alertId: number, newStatusId: number, _statusName: string) => {
@@ -558,6 +610,16 @@ export function App() {
         <LiveTrackingModal
           alert={standaloneAlert}
           isStandalone={true}
+          fetchTracking={async (desdeId) => {
+            const res = await callStaffAction('list-ubicaciones', {
+              id_reporte: standaloneAlert.id_reporte,
+              desde_id: desdeId,
+            });
+            return {
+              reporte: (res.reporte ?? null) as TrackingData['reporte'],
+              ubicaciones: (res.ubicaciones ?? []) as TrackingData['ubicaciones'],
+            };
+          }}
           onClose={() => window.close()}
         />
       </Suspense>
