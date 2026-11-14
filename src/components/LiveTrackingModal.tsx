@@ -5,10 +5,18 @@ import { X, ExternalLink, Radio, Navigation, Clock, ShieldAlert, AlertTriangle, 
 import { supabase } from '../lib/supabase';
 import type { AlertaReporte } from '../types';
 
+export interface TrackingData {
+  reporte: { descripcion?: string | null; id_estado?: number | null } | null;
+  ubicaciones: Array<{ id_ubicacion: number; id_reporte: number; latitud: number; longitud: number; fecha_hora?: string }>;
+}
+
 interface LiveTrackingModalProps {
   alert: AlertaReporte;
   onClose: () => void;
   isStandalone?: boolean;
+  /** Pide los puntos a `security` (list-ubicaciones) con el token del personal.
+   *  Con desdeId solo devuelve los puntos posteriores. */
+  fetchTracking: (desdeId?: number) => Promise<TrackingData>;
 }
 
 interface UbicacionPoint {
@@ -19,7 +27,7 @@ interface UbicacionPoint {
   fecha_hora?: string;
 }
 
-export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onClose, isStandalone = false }) => {
+export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onClose, isStandalone = false, fetchTracking }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -145,120 +153,99 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ alert, onC
     };
   }, [initialLat, initialLon, alert.id_reporte]);
 
-  // 2. Cargar historial inicial de puntos y suscribirse a Supabase Realtime
+  // 2. Cargar puntos vía `security` (list-ubicaciones) y escuchar avisos.
+  //    Ya no se lee `ubicacion` / `reporte` con la clave anónima.
+  const fetchTrackingRef = useRef(fetchTracking);
+  useEffect(() => {
+    fetchTrackingRef.current = fetchTracking;
+  }, [fetchTracking]);
+
   useEffect(() => {
     let isSubscribed = true;
+    let inFlight = false;
+    let lastId = 0;
+    let validPoints: UbicacionPoint[] = [];
+    let cancelled = false;
 
-    const fetchHistory = async () => {
+    const isCancelMarker = (d: { latitud: unknown; longitud: unknown }) =>
+      Math.abs(Number(d.latitud)) < 0.0001 && Math.abs(Number(d.longitud)) < 0.0001;
+
+    const sync = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const { data, error } = await supabase
-          .from('ubicacion')
-          .select('id_ubicacion, id_reporte, latitud, longitud, fecha_hora')
-          .eq('id_reporte', alert.id_reporte)
-          .order('id_ubicacion', { ascending: true });
-
-        if (!error && data && data.length > 0 && isSubscribed) {
-          // Detectar si existe marcador de cancelación (0,0) enviado por la app
-          const cancelPoint = data.find((d: any) => Math.abs(Number(d.latitud)) < 0.0001 && Math.abs(Number(d.longitud)) < 0.0001);
-          if (cancelPoint) {
-            setIsCancelled(true);
-            setIsLive(false);
-            setCancelledTime(new Date(cancelPoint.fecha_hora || Date.now()).toLocaleTimeString('es-PE'));
-          }
-
-          // Filtrar coordenadas reales válidas (excluyendo el marcador 0,0 de cancelación)
-          const validRows = data.filter((d: any) => !(Math.abs(Number(d.latitud)) < 0.0001 && Math.abs(Number(d.longitud)) < 0.0001));
-          if (validRows.length > 0) {
-            const mapped: UbicacionPoint[] = validRows.map((d: any) => ({
-              id: d.id_ubicacion,
-              id_reporte: d.id_reporte,
-              latitud: Number(d.latitud),
-              longitud: Number(d.longitud),
-              fecha_hora: d.fecha_hora,
-            }));
-            setPoints(mapped);
-            setLastUpdate(new Date(mapped[mapped.length - 1].fecha_hora || Date.now()).toLocaleTimeString('es-PE'));
-            updateMapRoute(mapped, cancelPoint != null);
-          }
+        const res = await fetchTrackingRef.current(lastId > 0 ? lastId : undefined);
+        if (!isSubscribed) return;
+        const rows = res?.ubicaciones ?? [];
+        if (rows.length > 0) {
+          lastId = Math.max(lastId, ...rows.map((r) => Number(r.id_ubicacion) || 0));
         }
 
-        // También verificar estado en tabla reporte
-        const { data: repData } = await supabase
-          .from('reporte')
-          .select('descripcion, id_estado')
-          .eq('id_reporte', alert.id_reporte)
-          .single();
+        // Marcador (0,0): el usuario canceló el rastreo desde la app.
+        const cancelPoint = rows.find(isCancelMarker);
+        if (cancelPoint && !cancelled) {
+          cancelled = true;
+          setIsCancelled(true);
+          setIsLive(false);
+          setCancelledTime(new Date(cancelPoint.fecha_hora || Date.now()).toLocaleTimeString('es-PE'));
+        }
 
-        if (repData && isSubscribed) {
-          if (repData.descripcion?.includes('[TRANSMISIÓN DE UBICACIÓN FINALIZADA POR EL USUARIO]') || repData.descripcion?.includes('[CANCELADO_POR_USUARIO]')) {
-            setIsCancelled(true);
-            setIsLive(false);
-          }
+        const nuevos: UbicacionPoint[] = rows
+          .filter((d) => !isCancelMarker(d))
+          .map((d) => ({
+            id: d.id_ubicacion,
+            id_reporte: d.id_reporte,
+            latitud: Number(d.latitud),
+            longitud: Number(d.longitud),
+            fecha_hora: d.fecha_hora,
+          }));
+        if (nuevos.length > 0) {
+          validPoints = [...validPoints, ...nuevos];
+          setPoints(validPoints);
+          setLastUpdate(new Date(nuevos[nuevos.length - 1].fecha_hora || Date.now()).toLocaleTimeString('es-PE'));
+          if (!cancelled) setIsLive(true);
+        }
+        if (nuevos.length > 0 || cancelPoint) updateMapRoute(validPoints, cancelled);
+
+        const desc = res?.reporte?.descripcion ?? '';
+        if (desc.includes('[TRANSMISIÓN DE UBICACIÓN FINALIZADA POR EL USUARIO]') || desc.includes('[CANCELADO_POR_USUARIO]')) {
+          cancelled = true;
+          setIsCancelled(true);
+          setIsLive(false);
         }
       } catch (err) {
-        console.warn('Error cargando historial de ubicaciones:', err);
+        console.warn('Error cargando ubicaciones:', err);
+      } finally {
+        inFlight = false;
       }
     };
 
-    fetchHistory();
+    sync();
 
-    // Suscripción Realtime a inserciones en la tabla 'ubicacion'
-    const channel = supabase
+    // Aviso sin datos por Realtime Broadcast (canal público 'rastreo:<id>').
+    const broadcastChannel = supabase
+      .channel(`rastreo:${alert.id_reporte}`)
+      .on('broadcast', { event: 'punto' }, () => { sync(); })
+      .subscribe();
+
+    // Transición: postgres_changes solo se usa como aviso; los datos se piden
+    // a `security`. Deja de emitir cuando se cierre el SELECT anónimo.
+    const legacyChannel = supabase
       .channel(`tracking-report-${alert.id_reporte}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ubicacion',
-          filter: `id_reporte=eq.${alert.id_reporte}`,
-        },
-        (payload) => {
-          const newRow = payload.new as any;
-          if (newRow && isSubscribed) {
-            const lat = Number(newRow.latitud);
-            const lon = Number(newRow.longitud);
-
-            // Si llega el marcador especial (0, 0), indica que el usuario canceló el rastreo desde la app
-            if (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) {
-              const nowTime = new Date().toLocaleTimeString('es-PE');
-              setIsCancelled(true);
-              setIsLive(false);
-              setCancelledTime(nowTime);
-              setPoints((prev) => {
-                updateMapRoute(prev, true);
-                return prev;
-              });
-              return;
-            }
-
-            const newPoint: UbicacionPoint = {
-              id: newRow.id_ubicacion,
-              id_reporte: newRow.id_reporte,
-              latitud: lat,
-              longitud: lon,
-              fecha_hora: newRow.fecha_hora || new Date().toISOString(),
-            };
-            setPoints((prev) => {
-              const next = [...prev, newPoint];
-              updateMapRoute(next, false);
-              return next;
-            });
-            setLastUpdate(new Date().toLocaleTimeString('es-PE'));
-            setIsLive(true);
-          }
-        }
+        { event: 'INSERT', schema: 'public', table: 'ubicacion', filter: `id_reporte=eq.${alert.id_reporte}` },
+        () => { sync(); }
       )
       .subscribe();
 
-    // Polling preventivo de respaldo cada 5 segundos
-    const pollTimer = setInterval(() => {
-      fetchHistory();
-    }, 5000);
+    // Sondeo de respaldo cada 5 segundos (solo trae puntos nuevos).
+    const pollTimer = setInterval(() => { sync(); }, 5000);
 
     return () => {
       isSubscribed = false;
-      supabase.removeChannel(channel);
+      supabase.removeChannel(broadcastChannel);
+      supabase.removeChannel(legacyChannel);
       clearInterval(pollTimer);
     };
   }, [alert.id_reporte, updateMapRoute]);
